@@ -1,0 +1,9 @@
+stages:
+  - verify
+
+verify:
+  stage: verify
+  image: node:20-alpine
+  script:
+    - node --test scripts/test.mjs
+    - node scripts/build.mjs --check
