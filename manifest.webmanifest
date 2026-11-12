@@ -1,0 +1,10 @@
+{
+  "name": "断链 · 3A大作",
+  "short_name": "断链",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#0b0d0f",
+  "theme_color": "#0b0d0f"
+}
