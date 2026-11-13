@@ -10,7 +10,7 @@ const PINS = 'scripts/pins.json'
 
 // 块 1 的 two parts 同属一个 IIFE 闭包，必须合并进同一个 <script>。
 const MERGE = [
-  ['src/lib/three.js', 'src/render/render.js', 'src/game/engine.js'],
+  ['src/lib/three.js', 'src/render/render.js', 'src/world/world.js', 'src/game/engine.js'],
   ['src/platform/adep.js'],
   ['src/platform/mobile.js'],
 ]
