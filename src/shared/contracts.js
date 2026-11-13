@@ -18,7 +18,7 @@ export const ModuleLifecycle = Object.freeze({ create: 'create', update: 'update
  * @property {import('three').DirectionalLight} sun           唯一投影光源（PCSS 阴影）
  * @property {import('three').Texture} env                    PMREM 烘焙的天空环境贴图
  * @property {object} quality                                 当前档位（见 schema.js QualityTier）
- * @property {object} post                                    后期参数对象（bloom/SSAO/tonemapping 等可调项）
+ * @property {object} post                                    后期参数对象（bloom/SSAO/tonemapping/TAA 等可调项）
  * @property {number} exposure                                曝光值
  * @property {{width:number,height:number,scale:number}} resolution  渲染分辨率（含动态缩放）
  * @property {(pass: (renderer: import('three').WebGLRenderer, scene: import('three').Scene, camera: import('three').PerspectiveCamera) => void) => void} addPrePass  注册合成前额外 pass
@@ -29,6 +29,7 @@ export const ModuleLifecycle = Object.freeze({ create: 'create', update: 'update
  * @property {number} frame                                   当前帧序号
  * @property {unknown} lightPool                              灯光池（复用光源实例）
  * @property {(position: {x:number,y:number,z:number}) => import('three').Texture} captureInteriorProbe  烘焙室内反射探针
+ * @note TAA（时间抗锯齿）：由画质档名决定，test/low 自动关、medium/high/ultra 自动开；`?taa=0` URL 参数可强制关。反馈强度为 post.taaFeedback（默认 0.12）。
  */
 
 /**
@@ -45,6 +46,7 @@ export const ModuleLifecycle = Object.freeze({ create: 'create', update: 'update
  * @property {object} combat     战斗：enemyShot、playerShot、explode
  * @property {object} level      关卡查询：coverPoints、vantage、skylights、shedLights、interiorBoxes、cinematicPath、objectives、extraction
  * @property {object} player     玩家只读快照（位置/朝向/生命/弹药等）
+ * @property {object} weapon     武器系统（game 模块产出）：equip(id)/nextWeapon/prevWeapon/currentId/setVisible 等；对应引擎 `i.weapon` 武器视件对象
  * @property {() => number} rng  种子随机（mulberry32 fork，禁止 Math.random）
  */
 

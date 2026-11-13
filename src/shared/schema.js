@@ -17,7 +17,25 @@
  * @property {number} hp             生命值
  * @property {boolean} alive         是否存活
  * @property {boolean} active        是否激活（敌人出生时 inactive，进入战斗才 active）
+ * @property {'standard'|'suppressor'|'elite'|'env'} variant  敌人变体（standard 默认 / suppressor 远程压制 / elite 护盾精英 / env 环境联动）
  * @property {string[]} tags         道具变体名（container20/container40/container40hc/crate_wood/barrel/…），兼作 AI/渲染/音频订阅 tag
+ */
+
+/**
+ * 武器定义（对齐 game 模块 WEAPON_DEFS 真实字段，D 路三武器 pac9/shotgun/rifle）。
+ * @typedef {object} WeaponRecord
+ * @property {string} id              武器 id（pac9 / shotgun / rifle）
+ * @property {string} name            显示名
+ * @property {'auto'|'pump'|'semi'} mode  射击模式（auto 自动 / pump 泵动 / semi 半自动）
+ * @property {number} damage          单颗弹丸伤害（霰弹枪按每颗计，×pellets）
+ * @property {number} rpm             射速（发/分）
+ * @property {number} magSize         弹匣容量
+ * @property {number} reserve         备用弹药
+ * @property {number} spreadBase      基础散布（弧度；越小越准，pac9 0.0125 / shotgun 0.055 / rifle 0.004）
+ * @property {number} range           射程（米）
+ * @property {number} pellets         单次击发弹丸数（霰弹枪 8，其余 1）
+ * @property {number} reloadTactical  战术换弹时长（秒）
+ * @property {number} reloadEmpty     空仓换弹时长（秒）
  */
 
 /**
