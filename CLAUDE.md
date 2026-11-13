@@ -50,7 +50,7 @@ node scripts/visual.mjs --update   # 重新生成截图基线
 
 carve 顺序：prettify → platform(✅) → render → world → game → ai → audio/ui。一人一分支一 MR，只改自己目录，合并门槛 = `npm test` 通过 + 截图回归不超阈值 + 帧时间基准不退化。
 
-当前进度：**P0 契约对齐 ✅（已提交）** → P1 验收基础设施（截图回归脚本已写，Playwright 基线待跑通）→ P2 模块并行 → P3 依赖化瘦身。
+当前进度：**P0 契约对齐 ✅（已提交）** → **P1 验收基础设施 ✅（已提交）**：截图回归（`scripts/visual.mjs`）+ 帧时间基准（`scripts/bench.mjs`）均跑通，headless SwiftShader 下确定性 diff=0 → P2 模块并行 → P3 依赖化瘦身。
 
 ## 调试钩子（引擎内置，写回归/基准必用）
 
