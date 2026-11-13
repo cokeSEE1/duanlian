@@ -2,7 +2,8 @@
   "src/lib/three.js": "43deda1b13ebd46e48fc2f4fc6cac1f376becaa4261bf1ab8fe15bd34034d3b9",
   "src/render/render.js": "03cf9667bb544b292772b134568dcffc65d7fb9d8dcf2c5324df391332930c8f",
   "src/world/world.js": "2b4127e916f20d821eee6ddb08b118716ea8fc4438df12f2b45ced97b5392169",
-  "src/game/engine.js": "890dd735c8a136d89fe94259fc53c214c933883deba146e02e2e2ad4b58fb587",
+  "src/game/game.js": "08938eebf980347690128f792b25b105bf8e29b488065e7663f4eddb80876957",
+  "src/game/engine.js": "19409c2909306c8f621ddd7fbc84d032871a9ff27ea575fb566cd2387c869d3f",
   "src/platform/adep.js": "c7c060ec7b7637f61964f11d79912b3233565f006d3c64b525c1bc738055f46b",
   "src/platform/mobile.js": "29c16fc4a3307be1c580221094159c1173274c61ca5809fcd7017fbbc7e31627"
 }
