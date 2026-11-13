@@ -1,6 +1,6 @@
 {
   "src/lib/three.js": "43deda1b13ebd46e48fc2f4fc6cac1f376becaa4261bf1ab8fe15bd34034d3b9",
-  "src/game/engine.js": "494fd7fcd9a75a5f3644df8d7dff352e7d8ab2c0d800ec8e488283e12f9082ac",
+  "src/game/engine.js": "8cd4011704914d50de2f63bba8d97e941b7b4290be85faa5ebce315f085b3fd1",
   "src/platform/adep.js": "c7c060ec7b7637f61964f11d79912b3233565f006d3c64b525c1bc738055f46b",
   "src/platform/mobile.js": "29c16fc4a3307be1c580221094159c1173274c61ca5809fcd7017fbbc7e31627"
 }
