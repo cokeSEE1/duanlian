@@ -7,6 +7,7 @@
 - 引擎按原字节拆为 `src/lib/three.js` + `src/game/engine.js`（构建时合并回同一 `<script>`），`src/platform/adep.js`、`src/platform/mobile.js` 独立。
 - 根目录 `index.html` 保持原文件不变（= 构建产物），`npm run build` 从 template 重放后**逐字节一致**（sha256 07e3cbbc…），行为零变化。
 - 冻结接口 v1 落地：`src/shared/events.js`（事件总线 + topic 表）、`schema.js`（WorldLayout/EntityRecord/ObjectiveRecord/QualityTier 字段）、`contracts.js`（create/update/dispose + RenderContext/GameContext）。
+- 冻结接口 v2 对齐（2026-11-13）：v1 的 topic 名/实体枚举/接口与引擎实际失同步，已对齐——`events.js` Topics 改为引擎真实冒号 topic 全集（32 emit，订阅为其子集）；`schema.js` EntityKind 收紧为 `hound/gull/relay/prop`、ObjectiveRecord.state 改 `live/cutting/cut`、EntityRecord/QualityTier/WorldLayout 字段回填；`contracts.js` EntityKinds 改 4 值、GameContext 补注入服务（physics/nav/combat/level/player/rng）、RenderContext 补公开面。
 - 回归防线：`scripts/pins.json` 逐文件 sha256 + CI `build --check`（pins 漂移 / index.html 失同步均失败）。
 
 ## carve 顺序（每步一个分支 + 一个 MR）

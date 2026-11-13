@@ -1,22 +1,53 @@
-// 事件总线（冻结接口 v1）：模块间通信的唯一通道。
+// 事件总线（冻结接口 v2）：模块间通信的唯一通道。
 // 规则：模块之间不直接 import 对方的内部符号；跨模块通知一律走 Topics。
+// v2 已对齐引擎真实 topic（冒号命名，emit 全集 32 个；订阅为其子集）。
 // 改动 topic 名或 payload 结构 = 接口变更，单独出 PR 并在 docs/MIGRATION.md 登记版本。
 
-/** @typedef {'entity.spawn'|'entity.damage'|'entity.kill'|'weapon.fire'|'weapon.reload'|'player.damage'|'player.health'|'objective.progress'|'objective.complete'|'quality.change'|'frame.stats'|'audio.play'} Topic */
+/** @typedef {'enemy:alert'|'enemy:fire'|'enemy:hit'|'enemy:killed'|'enemy:melee'|'enemy:spawn'|'enemy:step'|'enemy:telegraph'|'explosion'|'extraction:reached'|'game:state'|'impact'|'input:lock'|'objective:all'|'objective:done'|'objective:progress'|'player:dead'|'player:hit'|'player:hitEnemy'|'player:jump'|'player:land'|'player:rescued'|'player:step'|'quality:auto'|'radio:line'|'shell:bounce'|'thunder'|'ui:click'|'ui:hover'|'weapon:dry'|'weapon:fire'|'weapon:reload'} Topic */
 
 export const Topics = Object.freeze({
-  ENTITY_SPAWN: 'entity.spawn',
-  ENTITY_DAMAGE: 'entity.damage',
-  ENTITY_KILLED: 'entity.kill',
-  WEAPON_FIRED: 'weapon.fire',
-  WEAPON_RELOADED: 'weapon.reload',
-  PLAYER_DAMAGED: 'player.damage',
-  PLAYER_HEALTH: 'player.health',
-  OBJECTIVE_PROGRESS: 'objective.progress',
-  OBJECTIVE_COMPLETE: 'objective.complete',
-  QUALITY_CHANGED: 'quality.change',
-  FRAME_STATS: 'frame.stats',
-  AUDIO_PLAY: 'audio.play',
+  // enemy
+  ENEMY_ALERT: 'enemy:alert',
+  ENEMY_FIRE: 'enemy:fire',
+  ENEMY_HIT: 'enemy:hit',
+  ENEMY_KILLED: 'enemy:killed',
+  ENEMY_MELEE: 'enemy:melee',
+  ENEMY_SPAWN: 'enemy:spawn',
+  ENEMY_STEP: 'enemy:step',
+  ENEMY_TELEGRAPH: 'enemy:telegraph',
+  // world / fx
+  EXPLOSION: 'explosion',
+  EXTRACTION_REACHED: 'extraction:reached',
+  GAME_STATE: 'game:state',
+  IMPACT: 'impact',
+  INPUT_LOCK: 'input:lock',
+  THUNDER: 'thunder',
+  // objective
+  OBJECTIVE_ALL: 'objective:all',
+  OBJECTIVE_DONE: 'objective:done',
+  OBJECTIVE_PROGRESS: 'objective:progress',
+  // player
+  PLAYER_DEAD: 'player:dead',
+  PLAYER_HIT: 'player:hit',
+  PLAYER_HIT_ENEMY: 'player:hitEnemy',
+  PLAYER_JUMP: 'player:jump',
+  PLAYER_LAND: 'player:land',
+  PLAYER_RESCUED: 'player:rescued',
+  PLAYER_STEP: 'player:step',
+  // quality / audio / ui
+  QUALITY_AUTO: 'quality:auto',
+  RADIO_LINE: 'radio:line',
+  SHELL_BOUNCE: 'shell:bounce',
+  UI_CLICK: 'ui:click',
+  UI_HOVER: 'ui:hover',
+  // weapon
+  WEAPON_DRY: 'weapon:dry',
+  WEAPON_FIRE: 'weapon:fire',
+  WEAPON_RELOAD: 'weapon:reload',
+
+  // 兼容别名（v1 遗留，test.mjs 依赖，勿删）
+  ENTITY_DAMAGE: 'enemy:hit',
+  ENTITY_KILLED: 'enemy:killed',
 })
 
 export class EventBus {

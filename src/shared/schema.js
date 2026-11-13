@@ -1,45 +1,62 @@
-// 世界数据 schema（冻结接口 v1）。这里只冻结「字段名与语义」；数值以现引擎实现为准，carve 时回填并登记到 docs/MIGRATION.md。
+// 世界数据 schema（冻结接口 v2）。这里只冻结「字段名与语义」；数值以现引擎实现为准，carve 时回填并登记到 docs/MIGRATION.md。
 // 并行开发纪律：改 schema 先出 schema PR 合并，再各自实现。
-
-/** @typedef {'hound'|'guard'|'turret'|'drone'|'relay'|'prop'} EntityKind */
+// v2：枚举/字段对齐引擎真实实现（敌人仅 hound/gull，objective state=live/cutting/cut，实体字段=type/pos/hp/alive/active，Pr 与 ob() 真实字段回填）。
 
 /**
- * 实体记录。position/rotation 用 three 的 Vector3/Quaternion 语义（x,y,z + yaw）。
+ * 实体类型。敌人仅两类：hound（机械猎犬，四足地面主力）/ gull（机械飞鸥，四旋翼无人机）。
+ * 注意：turret 是 hound 模型上的炮塔骨骼、guard 是场景道具名（guard_booth）、drone 是音频名（music_drone），
+ * 它们不是敌人类型。relay = 中继目标；prop = 道具（具体变体名由 EntityRecord.tags 承载）。
+ * @typedef {'hound'|'gull'|'relay'|'prop'} EntityKind
+ */
+
+/**
+ * 实体记录。pos 用 three 的 Vector3 语义（{x,y,z}）。
  * @typedef {object} EntityRecord
- * @property {string} id            稳定唯一 ID（关卡内不重复）
- * @property {EntityKind} kind
- * @property {{x:number,y:number,z:number}} position
- * @property {number} yaw
- * @property {number} health
- * @property {boolean} alive
- * @property {string[]} tags        供 AI/渲染/音频按 tag 订阅，不按类型硬编码
+ * @property {EntityKind} type       实体类型（prop 实体的具体变体名由 tags 承载）
+ * @property {{x:number,y:number,z:number}} pos  世界坐标（THREE Vector3 语义）
+ * @property {number} hp             生命值
+ * @property {boolean} alive         是否存活
+ * @property {boolean} active        是否激活（敌人出生时 inactive，进入战斗才 active）
+ * @property {string[]} tags         道具变体名（container20/container40/container40hc/crate_wood/barrel/…），兼作 AI/渲染/音频订阅 tag
  */
 
 /**
  * 目标（现在 = 切断 3 处中继；多阶段关卡时扩展 type 与阶段字段）。
+ * state 沿 live → cutting → cut 推进（存活 → 切割中 → 已切断），由 game 模块驱动、引擎 object.userData.setState 落地。
  * @typedef {object} ObjectiveRecord
  * @property {string} id
  * @property {'relay'} type
  * @property {{x:number,y:number,z:number}} position
- * @property {'pending'|'active'|'done'|'failed'} state
+ * @property {'live'|'cutting'|'cut'} state
  */
 
 /**
- * 画质档位。字段名冻结；数值（resScale/shadowMapSize/planar/ssaoSamples/bloomLevels/pixelBudget 等）
- * 以 render 模块 carve 时的现实现为准回填，不在此编造。
+ * 画质档位（对齐渲染模块 Pr 表真实字段）。
  * @typedef {object} QualityTier
- * @property {number} resScale        动态分辨率基准（帧时间自适应会在此上下浮动）
- * @property {number} shadowMapSize   太阳阴影贴图边长
- * @property {number} planar          平面反射 RT 缩放
- * @property {number} ssaoSamples     SSAO Vogel 采样数
- * @property {number} bloomLevels     bloom 级数
+ * @property {number} scale         分辨率缩放（0.7 / 0.85 / 1）
+ * @property {number} shadow        阴影贴图边长（1024 / 2048 / 4096）
+ * @property {number} tex           纹理档（256 / 512 / 1024 / 2048）
+ * @property {number} volSteps      体积光步数（10 / 12 / 16 / 24 / 40）
+ * @property {boolean} ao           SSAO 开关（采样数由档名派生：低 8 / 中 12 / 高 16）
+ * @property {number} planar        平面反射 RT 缩放（0 / 0.5 / 1）
+ * @property {boolean} bloom        bloom 开关
+ * @property {boolean} motionBlur   运动模糊开关
+ * @property {number} rain          雨量（0.4 ~ 1）
  */
 
 /**
- * 关卡布局（程序化排布的输入/输出契约，world 模块负责产出）。
+ * 关卡布局（level 模块 ob() 的产出契约）。
  * @typedef {object} WorldLayout
- * @property {number} seed
- * @property {{min:{x:number,y:number,z:number},max:{x:number,y:number,z:number}}} bounds
- * @property {EntityRecord[]} entities
- * @property {ObjectiveRecord[]} objectives
+ * @property {{pos:{x:number,y:number,z:number}, yaw:number}} playerStart   玩家出生点
+ * @property {ObjectiveRecord[]} objectives                                 中继目标（relay_a/b/c 三处）
+ * @property {{pos:{x:number,y:number,z:number}, radius:number}} extraction 撤离点
+ * @property {Array<{pos:{x:number,y:number,z:number}, zone:string, type:'air'|'ground'}>} enemySpawns 敌人生成点
+ * @property {Array<{name:string, min:[number,number,number], max:[number,number,number]}>} zones 区域（gate/yard/shed/quay 等）
+ * @property {Array<{min:{x:number,y:number,z:number}, max:{x:number,y:number,z:number}}>} interiorBoxes 室内包围盒
+ * @property {Array<{pos:[number,number,number], look:[number,number,number]}>} cinematicPath 开场运镜路径
+ * @property {Array<{x:number,y:number,z:number}>} coverPoints               掩体点
+ * @property {Array} skylights                                                天窗
+ * @property {Array} shedLights                                               库房灯
+ * @property {{stairsFoot:{x:number,y:number,z:number}, roof:{x:number,y:number,z:number}}} vantage 制高点
+ * @property {object} stats                                                   统计（labelsAtlased/containers/props/tris/meshes）
  */
