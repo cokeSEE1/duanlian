@@ -3,10 +3,10 @@
 // v2：枚举/字段对齐引擎真实实现（敌人仅 hound/gull，objective state=live/cutting/cut，实体字段=type/pos/hp/alive/active，Pr 与 ob() 真实字段回填）。
 
 /**
- * 实体类型。敌人仅两类：hound（机械猎犬，四足地面主力）/ gull（机械飞鸥，四旋翼无人机）。
+ * 实体类型。敌人三类：hound（机械猎犬，四足地面主力）/ gull（机械飞鸥，四旋翼无人机）/ sentinel（重装四足机甲，图 1 关底 boss）。
  * 注意：turret 是 hound 模型上的炮塔骨骼、guard 是场景道具名（guard_booth）、drone 是音频名（music_drone），
  * 它们不是敌人类型。relay = 中继目标；prop = 道具（具体变体名由 EntityRecord.tags 承载）。
- * @typedef {'hound'|'gull'|'relay'|'prop'} EntityKind
+ * @typedef {'hound'|'gull'|'relay'|'prop'|'sentinel'} EntityKind
  */
 
 /**

@@ -1,12 +1,17 @@
 // 事件总线（冻结接口 v2）：模块间通信的唯一通道。
 // 规则：模块之间不直接 import 对方的内部符号；跨模块通知一律走 Topics。
-// v2 已对齐引擎真实 topic（冒号命名，emit 全集 35 个；订阅为其子集）。
-// 其中 weapon:drop / weapon:pickup / weapon:switch 为 D 路「武器掉落/拾取/切换」三事件，game 模块 emit。
+// v2 已对齐引擎真实 topic（冒号命名，emit 全集 38 个；订阅为其子集）。
+// 其中 weapon:drop / weapon:pickup / weapon:switch 为 D 路「武器掉落/拾取/切换」三事件，game 模块 emit；
+// boss:spawn / boss:phase / boss:killed 为 D 路第二波「关底 boss 战」三事件，ai 模块 emit。
 // 改动 topic 名或 payload 结构 = 接口变更，单独出 PR 并在 docs/MIGRATION.md 登记版本。
 
-/** @typedef {'enemy:alert'|'enemy:fire'|'enemy:hit'|'enemy:killed'|'enemy:melee'|'enemy:spawn'|'enemy:step'|'enemy:telegraph'|'explosion'|'extraction:reached'|'game:state'|'impact'|'input:lock'|'objective:all'|'objective:done'|'objective:progress'|'player:dead'|'player:hit'|'player:hitEnemy'|'player:jump'|'player:land'|'player:rescued'|'player:step'|'quality:auto'|'radio:line'|'shell:bounce'|'thunder'|'ui:click'|'ui:hover'|'weapon:drop'|'weapon:dry'|'weapon:fire'|'weapon:pickup'|'weapon:reload'|'weapon:switch'} Topic */
+/** @typedef {'boss:killed'|'boss:phase'|'boss:spawn'|'enemy:alert'|'enemy:fire'|'enemy:hit'|'enemy:killed'|'enemy:melee'|'enemy:spawn'|'enemy:step'|'enemy:telegraph'|'explosion'|'extraction:reached'|'game:state'|'impact'|'input:lock'|'objective:all'|'objective:done'|'objective:progress'|'player:dead'|'player:hit'|'player:hitEnemy'|'player:jump'|'player:land'|'player:rescued'|'player:step'|'quality:auto'|'radio:line'|'shell:bounce'|'thunder'|'ui:click'|'ui:hover'|'weapon:drop'|'weapon:dry'|'weapon:fire'|'weapon:pickup'|'weapon:reload'|'weapon:switch'} Topic */
 
 export const Topics = Object.freeze({
+  // boss
+  BOSS_SPAWN: 'boss:spawn',
+  BOSS_PHASE: 'boss:phase',
+  BOSS_KILLED: 'boss:killed',
   // enemy
   ENEMY_ALERT: 'enemy:alert',
   ENEMY_FIRE: 'enemy:fire',

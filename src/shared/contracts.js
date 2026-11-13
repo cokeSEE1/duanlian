@@ -2,8 +2,8 @@
 // 目的：多 agent 并行时，集成方只看这三个入口 + events 订阅，不关心模块内部。
 // v2 变更：EntityKinds / GameContext / RenderContext 对齐引擎真实实现（AI 每帧热循环依赖的注入服务、输入工厂完整接口、渲染模块公开面）。
 
-/** @typedef {'hound'|'gull'|'relay'|'prop'} EntityKind */
-export const EntityKinds = Object.freeze(['hound', 'gull', 'relay', 'prop'])
+/** @typedef {'hound'|'gull'|'relay'|'prop'|'sentinel'} EntityKind */
+export const EntityKinds = Object.freeze(['hound', 'gull', 'relay', 'prop', 'sentinel'])
 
 /** 模块必须导出的生命周期入口名 */
 export const ModuleLifecycle = Object.freeze({ create: 'create', update: 'update', dispose: 'dispose' })
@@ -43,11 +43,12 @@ export const ModuleLifecycle = Object.freeze({ create: 'create', update: 'update
  * @property {number} time       累计秒
  * @property {object} physics    碰撞/查询：raycast、lineOfSight、groundHeight
  * @property {object} nav        寻路：findPath、replan、卡住检测
- * @property {object} combat     战斗：enemyShot、playerShot、explode
+ * @property {object} combat     战斗：enemyShot、playerShot、explode（AOE 伤害）、spawnProjectile（追踪弹道，D 路第二波火箭弹/boss 导弹共用）
  * @property {object} level      关卡查询：coverPoints、vantage、skylights、shedLights、interiorBoxes、cinematicPath、objectives、extraction
  * @property {object} player     玩家只读快照（位置/朝向/生命/弹药等）
  * @property {object} weapon     武器系统（game 模块产出）：equip(id)/nextWeapon/prevWeapon/currentId/setVisible 等；对应引擎 `i.weapon` 武器视件对象
  * @property {() => number} rng  种子随机（mulberry32 fork，禁止 Math.random）
+ * @note spawnProjectile(opts)：opts={from:Vector3, dir:Vector3, speed, damage, radius, source:'player'|'enemy', tracking:object|null, life}。追踪弹命中/超时后走 explode() AOE 结算；boss（ai.js）通过它发射肩部导弹，火箭弹（game.js）用它发射玩家火箭。
  */
 
 /**
