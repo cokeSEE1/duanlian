@@ -1,9 +1,9 @@
 {
   "src/lib/three.js": "43deda1b13ebd46e48fc2f4fc6cac1f376becaa4261bf1ab8fe15bd34034d3b9",
-  "src/render/render.js": "03cf9667bb544b292772b134568dcffc65d7fb9d8dcf2c5324df391332930c8f",
-  "src/world/world.js": "2b4127e916f20d821eee6ddb08b118716ea8fc4438df12f2b45ced97b5392169",
-  "src/game/game.js": "08938eebf980347690128f792b25b105bf8e29b488065e7663f4eddb80876957",
-  "src/ai/ai.js": "19409c2909306c8f621ddd7fbc84d032871a9ff27ea575fb566cd2387c869d3f",
+  "src/render/render.js": "e890199301b586e1365c69aee486b1c8bcdf6a6827222078171fbe7ac86386f7",
+  "src/world/world.js": "553bebedbb517b4b384bb84fd39a9e8f3fd1497ad98a823943ea88767c7676c2",
+  "src/game/game.js": "33c5fac5ff7dd6e9ec08a5e55e36b9d38f004286e91ffcd7fc0121ff495613ec",
+  "src/ai/ai.js": "c0a62988a9529982702ad787f0e81b53dd1098791dcb7c5a8dbc788ccf733e06",
   "src/platform/adep.js": "c7c060ec7b7637f61964f11d79912b3233565f006d3c64b525c1bc738055f46b",
   "src/platform/mobile.js": "29c16fc4a3307be1c580221094159c1173274c61ca5809fcd7017fbbc7e31627"
 }

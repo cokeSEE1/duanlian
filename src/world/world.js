@@ -10390,6 +10390,89 @@ function hR(i) {
     i.decal("rust_run", 1, 9, 3.2, no.Z1 + 0.064, "z+"),
     i.decal("grime_streak", 1.2, -14, 3.9, no.Z1 + 0.064, "z+");
 }
+function hR1(i) {
+  let e = i.place, t = i.stack;
+  // 横贯壁垒：东西向 1 层集装箱长墙（顶部 2.59 可走），南北两列 + 角部高层掩体
+  t(-14, 12, [[40, "green"]]), t(-1.8, 12, [[40, "blue"]]), t(10.4, 12, [[40, "orange"]]),
+    t(-14, 22, [[40, "teal"]]), t(-1.8, 22, [[40, "grey"]]);
+  t(-16, 26, [[20, "red"], [20, "yellow"]]), t(8, 26, [[40, "white"], [40, "green"]]);
+  i.stairs(-21.6, 12, 0, 0, { seed: 30 }),
+    i.stairs(-21.6, 22, 0, 0, { seed: 31 });
+  i.catwalk(-7.9, 12, 0, 2.54, { seed: 32 }),
+    i.catwalk(4.3, 12, 0, 2.54, { seed: 33 }),
+    i.catwalk(-7.9, 22, 0, 2.54, { seed: 34 }),
+    i.catwalk(-14, 15, ts, 2.54, { seed: 35 }),
+    i.catwalk(-14, 17.5, ts, 2.54, { seed: 36 }),
+    i.catwalk(-14, 20, ts, 2.54, { seed: 37 }),
+    i.catwalk(-1.8, 15, ts, 2.54, { seed: 38 }),
+    i.catwalk(-1.8, 17.5, ts, 2.54, { seed: 39 }),
+    i.catwalk(-1.8, 20, ts, 2.54, { seed: 40 });
+  for (let s of [-14, -1.8])
+    for (let o of [10, 14, 18, 24]) i.rod("steel_galv", [s, 0, o], [s, 2.59, o], 0.04);
+  e("sandbags", -1.8, 12, 0, { seed: 41 }, 2.59),
+    e("crate_wood", -1.8, 22, 0.1, { seed: 42 }, 2.59),
+    e("barrel", -14, 12, 0, { seed: 43, color: "blue" }, 2.59),
+    e("barrel", 10.4, 12, 0, { seed: 44 }, 2.59);
+  e("jersey_barrier", -21.4, -6.2, 0.05, { seed: 1 }),
+    e("sandbags", -20.8, 2.2, 0.2, { seed: 2 }),
+    e("tire_stack", -21.6, 14.2, 0, { seed: 3 }),
+    e("dumpster", -21.8, 20.6, 0, { seed: 4 }),
+    e("pallet_stack", -20.4, 26.2, 0.08, { seed: 5 }),
+    e("pipe_stack", -18.2, -8.2, 0.03, { seed: 6 }),
+    e("cable_reel", -17.2, -8.6, 0.3, { seed: 7 }),
+    e("ibc_tote", 14.6, -6.4, 0.05, { seed: 8 }),
+    e("tire_stack", 14.6, 6.4, 0, { seed: 9 }),
+    e("crate_stack", 14.4, 16.4, 0.05, { seed: 10 }),
+    e("tarp_cargo", 14.6, 24.2, 0.06, { seed: 11 }),
+    e("gas_cylinders", 14.2, 28.2, 0, { seed: 12 }),
+    e("light_mast", -20.4, 8.4, 0, { seed: 13 }),
+    e("light_mast", -20.4, 22.4, 0, { seed: 14 }),
+    e("light_mast", 14.4, 10.4, 0, { seed: 15 }),
+    e("light_mast", 14.4, 24.4, 0, { seed: 16 });
+  return { relayPos: new W(-1.8, 2.59, 12), vantage: { stairsFoot: mt(-21.6, 0, 12), roof: mt(-1.8, 2.59, 12) } };
+}
+function hR2(i) {
+  let e = i.place, t = i.stack;
+  // 堡垒环：四面 1 层集装箱围墙 + 中央天井 + 中央高层掩体
+  t(-12, -2, [[40, "grey"]]), t(0.4, -2, [[40, "blue"]]),
+    t(-12, 20, [[40, "green"]]), t(0.4, 20, [[40, "orange"]]);
+  t(-18, 9, [[40, "teal"]], ts), t(7, 9, [[40, "red"]], ts);
+  t(3, 9, [[20, "white"], [20, "yellow"]]);
+  i.stairs(-19.5, -2, 0, 0, { seed: 30 }),
+    i.stairs(-19.5, 20, 0, 0, { seed: 31 }),
+    i.stairs(-18, 16.6, ts, 0, { seed: 32 }),
+    i.stairs(7, 16.6, ts, 0, { seed: 33 });
+  i.catwalk(-5.9, -2, 0, 2.54, { seed: 34 }),
+    i.catwalk(-5.9, 20, 0, 2.54, { seed: 35 }),
+    i.catwalk(-18, 3.5, ts, 2.54, { seed: 36 }),
+    i.catwalk(-18, 14.5, ts, 2.54, { seed: 37 }),
+    i.catwalk(7, 3.5, ts, 2.54, { seed: 38 }),
+    i.catwalk(7, 14.5, ts, 2.54, { seed: 39 });
+  for (let s of [-12, 0.4])
+    for (let o of [-4, 2, 8, 14, 22]) i.rod("steel_galv", [s, 0, o], [s, 2.59, o], 0.04);
+  for (let s of [-18, 7])
+    for (let o of [1, 9, 17]) i.rod("steel_galv", [s, 0, o], [s, 2.59, o], 0.04);
+  e("sandbags", -5.9, -2, 0, { seed: 40 }, 2.59),
+    e("crate_wood", -8, 9, 0.1, { seed: 41 }),
+    e("barrel", -12, 20, 0, { seed: 42, color: "blue" }, 2.59);
+  e("jersey_barrier", -21.4, -6.2, 0.05, { seed: 1 }),
+    e("sandbags", -20.8, -4.4, 0.2, { seed: 2 }),
+    e("tire_stack", -21.6, 6.2, 0, { seed: 3 }),
+    e("dumpster", -21.8, 16.2, 0, { seed: 4 }),
+    e("pallet_stack", -20.4, 24.2, 0.08, { seed: 5 }),
+    e("pipe_stack", -18.2, -8.2, 0.03, { seed: 6 }),
+    e("cable_reel", -17.2, -8.6, 0.3, { seed: 7 }),
+    e("ibc_tote", 14.6, -6.4, 0.05, { seed: 8 }),
+    e("tire_stack", 14.6, 6.4, 0, { seed: 9 }),
+    e("crate_stack", 14.4, 16.4, 0.05, { seed: 10 }),
+    e("tarp_cargo", 14.6, 24.2, 0.06, { seed: 11 }),
+    e("gas_cylinders", 14.2, 28.2, 0, { seed: 12 }),
+    e("light_mast", -20.4, 8.4, 0, { seed: 13 }),
+    e("light_mast", -20.4, 22.4, 0, { seed: 14 }),
+    e("light_mast", 14.4, 10.4, 0, { seed: 15 }),
+    e("light_mast", 14.4, 24.4, 0, { seed: 16 });
+  return { relayPos: new W(-5.9, 2.59, -2), vantage: { stairsFoot: mt(-19.5, 0, -2), roof: mt(-5.9, 2.59, -2) } };
+}
 function fR(i) {
   let e = i.place,
     t = -38,
@@ -10491,11 +10574,17 @@ function fR(i) {
 async function C1(i) {
   let e = new wt();
   (e.name = "level"), i.scene.add(e);
-  let t = ob(i);
-  hR(t), fR(t);
+  let t = ob(i),
+    wL = Math.max(0, Math.min(2, +(i.params && i.params.layout) || 0)),
+    wY = {
+      relayPos: mt(1.5, 0, 7.5),
+      vantage: { stairsFoot: mt(-2.2, 0, 12.4), roof: mt(13.5, 2.59, 12.4) },
+    };
+  wL === 1 ? (wY = hR1(t)) : wL === 2 ? (wY = hR2(t)) : hR(t);
+  fR(t);
   let n = ab(t),
     s = cb(t),
-    o = t.place("relay_node", 1.5, 7.5, 0.35, { seed: 1 }, 0),
+    o = t.place("relay_node", wY.relayPos.x, wY.relayPos.z, 0.35, { seed: 1 }, wY.relayPos.y),
     r = t.place("relay_node", n.relayPos.x, n.relayPos.z, ts * 0.9, { seed: 2 }, no.FLOOR),
     a = t.place("relay_node", s.relayPos.x, s.relayPos.z, -0.2, { seed: 3 }, 0);
   Lr(
@@ -10577,7 +10666,7 @@ async function C1(i) {
   });
   let d = { pos: mt(-32, 0, 6), yaw: -ts },
     v = [
-      { id: "relay_a", label: "甲号中继 · 堆场", zone: "yard", pos: mt(1.5, 0, 7.5), object: o },
+      { id: "relay_a", label: "甲号中继 · 堆场", zone: "yard", pos: wY.relayPos.clone(), object: o },
       {
         id: "relay_b",
         label: "乙号中继 · 仓库",
@@ -10730,6 +10819,138 @@ async function C1(i) {
             }
           }
     };
+  if (wL === 1) {
+    // 横贯壁垒：出生/掩体按南北两列长墙 + 角部高层掩体重配，shed/quay/gate 沿用原布局
+    y = [
+      ...y.filter((q) => q.zone !== "yard"),
+      g(-19, -1.4, "yard"),
+      g(-8, 3, "yard"),
+      g(3.5, -1.6, "yard"),
+      g(12, 5, "yard"),
+      g(-21.6, 6, "yard"),
+      g(-14, 16, "yard"),
+      g(-1.8, 16, "yard"),
+      g(6, 16, "yard"),
+      g(14.2, 16.4, "yard"),
+      g(-10, 26, "yard"),
+      g(-20, 26, "yard"),
+      g(0, 28, "yard"),
+      x(-16, 9, 14, "yard"),
+      x(2, 10, 17, "yard"),
+      x(10, 8, 20, "yard"),
+      x(-4, 12, 24, "yard"),
+      x(6, 9, 26, "yard"),
+    ];
+    _ = [
+      ..._.filter((q) => q.x < -24 || q.x > 16 || q.z < -10 || q.z > 30),
+      mt(-19.2, 0, 4.7),
+      mt(-17.4, 0, 4.9),
+      mt(-12.5, 0, 7.2),
+      mt(-9.3, 0, 6.4),
+      mt(-6.3, 0, 7.3),
+      mt(-2.9, 0, 6.1),
+      mt(-2.9, 0, 4.5),
+      mt(5.6, 0, 5.8),
+      mt(5.6, 0, 4.2),
+      mt(9.2, 0, 4.4),
+      mt(7.5, 0, 7.7),
+      mt(12.9, 0, 8.8),
+      mt(11.6, 0, 4.9),
+      mt(-13.5, 0, -1.5),
+      mt(-9.6, 0, -0.7),
+      mt(7.8, 0, -1.5),
+      mt(-4.2, 0, -2.2),
+      mt(-0.9, 0, -6.7),
+      mt(-6.7, 0, -7),
+      mt(1.2, 0, -8.9),
+      mt(-2.2, 0, 10.4),
+      mt(5, 0, 8.9),
+      mt(-4.8, 0, 10.6),
+      mt(-1, 0, 13.6),
+      mt(-8.1, 0, 15.4),
+      mt(-14, 0, 16),
+      mt(-1.8, 0, 16),
+      mt(0.6, 0, 16.9),
+      mt(4.2, 0, 15.7),
+      mt(6, 0, 16),
+      mt(-16, 0, 15.6),
+      mt(12, 0, 17.2),
+      mt(-20, 0, 26),
+      mt(-10, 0, 26),
+      mt(-6, 0, 26),
+      mt(0, 0, 26),
+      mt(-16, 0, 28),
+      mt(0, 0, 28),
+      mt(8, 0, 28),
+      mt(-14, 2.59, 12),
+      mt(-1.8, 2.59, 12),
+      mt(10.4, 2.59, 12),
+      mt(-14, 2.59, 22),
+      mt(-1.8, 2.59, 22),
+    ];
+  } else if (wL === 2) {
+    // 堡垒环：出生/掩体绕四墙外侧、中央天井与墙顶走道分布
+    y = [
+      ...y.filter((q) => q.zone !== "yard"),
+      g(-6, -6, "yard"),
+      g(6, -6, "yard"),
+      g(-18, -5, "yard"),
+      g(12, -5, "yard"),
+      g(-14, 4, "yard"),
+      g(-6, 4, "yard"),
+      g(0, 2, "yard"),
+      g(-14, 14, "yard"),
+      g(-6, 16, "yard"),
+      g(2, 14, "yard"),
+      g(-16, 26, "yard"),
+      g(0, 26, "yard"),
+      g(14, 26, "yard"),
+      g(12, 4, "yard"),
+      g(12, 12, "yard"),
+      g(-21, 6, "yard"),
+      g(-21, 14, "yard"),
+      x(-6, 9, 9, "yard"),
+      x(-18, 8, 9, "yard"),
+      x(7, 8, 9, "yard"),
+      x(0, 9, 20, "yard"),
+      x(0, 9, -2, "yard"),
+      x(-12, 10, 26, "yard"),
+    ];
+    _ = [
+      ..._.filter((q) => q.x < -24 || q.x > 16 || q.z < -10 || q.z > 30),
+      mt(-13.5, 0, -6),
+      mt(-6, 0, -7),
+      mt(0, 0, -6.7),
+      mt(6, 0, -7),
+      mt(12, 0, -5),
+      mt(-18, 0, -5),
+      mt(-21, 0, 6),
+      mt(-21, 0, 14),
+      mt(-20, 0, 24),
+      mt(-14, 0, 4),
+      mt(-10, 0, 8),
+      mt(-6, 0, 4),
+      mt(0, 0, 2),
+      mt(0, 0, 6),
+      mt(-14, 0, 14),
+      mt(-10, 0, 16),
+      mt(-6, 0, 16),
+      mt(-2, 0, 16),
+      mt(2, 0, 14),
+      mt(-16, 0, 26),
+      mt(-8, 0, 25),
+      mt(0, 0, 26),
+      mt(8, 0, 25),
+      mt(14, 0, 26),
+      mt(12, 0, 4),
+      mt(12, 0, 12),
+      mt(12, 0, 17.2),
+      mt(-5.9, 2.59, -2),
+      mt(-12, 2.59, 20),
+      mt(-18, 2.59, 9),
+      mt(7, 2.59, 9),
+    ];
+  }
   _.forEach(E),
     y.forEach((z) => {
       z.type === "ground" && E(z.pos);
@@ -10747,7 +10968,7 @@ async function C1(i) {
     coverPoints: _,
     skylights: n.skylights,
     shedLights: n.lights,
-    vantage: { stairsFoot: mt(-2.2, 0, 12.4), roof: mt(13.5, 2.59, 12.4) },
+    vantage: wY.vantage,
     stats: {
       labelsAtlased: h.count,
       containers: t.placed.filter((z) => z.name.startsWith("container")).length,

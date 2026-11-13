@@ -711,6 +711,17 @@ var Zv = {
     fireRange: 42,
     explodeRadius: 3,
     explodeDamage: 30,
+    suppRangeMin: 26,
+    suppRangeMax: 46,
+    suppBurst: 6,
+    suppSpread: 0.14,
+    suppDamage: 4,
+    envScanRange: 26,
+    envTriggerRange: 9,
+    envHover: 6,
+    envCooldown: 3,
+    envExplodeRadius: 4.5,
+    envExplodeDamage: 26,
   },
   Pn = Zv,
   $o = new W(),
@@ -753,6 +764,12 @@ function Q_(i, e, t, n) {
   let d = {
     id: 0,
     type: "gull",
+    variant: "standard",
+    flank: 0,
+    role: "free",
+    envT: 0,
+    envCd: 0,
+    envHaz: null,
     pos: a.group.position,
     alive: !1,
     hp: Pn.hp,
@@ -849,7 +866,13 @@ function Q_(i, e, t, n) {
         (d.spin = 0),
         (d.lostRotor = -1),
         (d.flare = 0),
-        (d.thr = 1);
+        (d.thr = 1),
+        (d.variant = b.variant || "standard"),
+        (d.flank = 0),
+        (d.role = "free"),
+        (d.envT = 0),
+        (d.envCd = 0),
+        (d.envHaz = null);
       for (let m = 0; m < 4; m++) l["rotor" + m].scale.setScalar(1);
       if (
         (l.lamp.scale.setScalar(1),
@@ -961,6 +984,22 @@ function Q_(i, e, t, n) {
           s.combat.explode(d.pos, Pn.explodeRadius, Pn.explodeDamage, "enemy"),
         i.retire(d));
   }
+  function HZ() {
+    let b = s.player;
+    if (!b || !s.scene || !s.scene.traverse) return null;
+    let best = null,
+      bestD = Pn.envScanRange,
+      tmp = new W();
+    s.scene.traverse((o) => {
+      let p = o.userData && o.userData.prop;
+      if (p !== "barrel" && p !== "jerry_can" && p !== "gas_cylinders") return;
+      o.updateWorldMatrix && o.updateWorldMatrix(!0, !1);
+      o.getWorldPosition && o.getWorldPosition(tmp);
+      let dist = tmp.distanceTo(b.pos);
+      dist < bestD && ((bestD = dist), (best = tmp.clone()));
+    });
+    return best;
+  }
   function x(y) {
     let b = s.player,
       m = i.t;
@@ -980,7 +1019,11 @@ function Q_(i, e, t, n) {
         d.flipT <= 0 &&
           ((d.flipT = 3 + o() * 5),
           o() < 0.6 && (d.orbitDir = -d.orbitDir),
-          (d.orbitR = bl(d.orbitR + (o() - 0.5) * 6, Pn.rangeMin + 1, Pn.rangeMax - 2))),
+          (d.orbitR = bl(
+            d.orbitR + (o() - 0.5) * 6,
+            d.variant === "suppressor" ? Pn.suppRangeMin : Pn.rangeMin + 1,
+            d.variant === "suppressor" ? Pn.suppRangeMax : Pn.rangeMax - 2,
+          ))),
         d.noSeeT > 1.5
           ? ((E = d.lastKnown.x),
             (S = d.lastKnown.z),
@@ -1001,6 +1044,22 @@ function Q_(i, e, t, n) {
           (E = d.home.x + Math.cos(d.orbitA) * d.patrolR),
           (S = d.home.z + Math.sin(d.orbitA) * d.patrolR),
           (w = d.hoverFixed ? d.alt : d.home.y));
+    if (d.variant === "env" && A && b) {
+      (d.envCd -= y),
+        (d.envT -= y),
+        d.envT <= 0 && ((d.envT = 0.6), (d.envHaz = HZ())),
+        d.envHaz &&
+          ((E = d.envHaz.x),
+          (S = d.envHaz.z),
+          (w = d.envHaz.y + Pn.envHover),
+          d.envCd <= 0 &&
+            d.pos.distanceTo(d.envHaz) < Pn.envTriggerRange &&
+            ((d.envCd = Pn.envCooldown),
+            s.combat && s.combat.explode && s.combat.explode(d.envHaz, Pn.envExplodeRadius, Pn.envExplodeDamage, "enemy"),
+            s.fx.explosion(d.envHaz, Pn.envExplodeRadius),
+            (d.flare = 1),
+            (d.envHaz = null)));
+    }
     w > d.ceil && (w = d.ceil),
       !d.hoverFixed && w < 2.2 && (w = 2.2),
       Co.set(
@@ -1128,12 +1187,13 @@ function Q_(i, e, t, n) {
       d.atk === "idle")
     )
       A &&
-        d.los &&
+        (d.los || (d.variant === "suppressor" && d.noSeeT < 2)) &&
         d.cool <= 0 &&
         b &&
         b.alive &&
-        Math.abs(U) < 0.35 &&
-        d.pos.distanceTo(b.pos) < Pn.fireRange &&
+        Math.abs(U) < (d.variant === "suppressor" ? 0.9 : 0.35) &&
+        d.pos.distanceTo(d.variant === "suppressor" && !d.los ? d.lastKnown : b.pos) <
+          (d.variant === "suppressor" ? Pn.suppRangeMax : Pn.fireRange) &&
         i.requestToken(d) &&
         ((d.atk = "tele"),
         (d.atkT = Pn.telegraph),
@@ -1148,16 +1208,25 @@ function Q_(i, e, t, n) {
         (d.flare = Math.min(1, d.flare + y * 4.5)),
         A
           ? d.atkT <= 0 &&
-            ((d.atk = "burst"), (d.shots = Pn.burst), (d.atkT = 0), (d.lead = 0.2 + o() * 0.65))
+            ((d.atk = "burst"),
+            (d.shots = d.variant === "suppressor" ? Pn.suppBurst : Pn.burst),
+            (d.atkT = 0),
+            (d.lead = 0.2 + o() * 0.65))
           : ((d.atk = "idle"), i.releaseToken(d));
     else if (d.atk === "burst" && ((d.atkT -= y), (d.flare = 1), d.atkT <= 0)) {
       if (((d.atkT = Pn.burstGap), d.shots--, b)) {
-        let P = d.muzzle.distanceTo(b.pos),
-          V = P / Pn.boltSpeed;
-        ou.set(b.pos.x + b.vel.x * V * d.lead, b.pos.y + 1.05, b.pos.z + b.vel.z * V * d.lead),
-          Bs.copy(ou).sub(d.muzzle).normalize();
+        let blind = d.variant === "suppressor" && !d.los;
+        if (blind) ou.set(d.lastKnown.x, d.lastKnown.y + 1.05, d.lastKnown.z);
+        else {
+          let P = d.muzzle.distanceTo(b.pos),
+            V = P / Pn.boltSpeed;
+          ou.set(b.pos.x + b.vel.x * V * d.lead, b.pos.y + 1.05, b.pos.z + b.vel.z * V * d.lead);
+        }
+        Bs.copy(ou).sub(d.muzzle).normalize();
         let Y =
-          (Pn.spreadFar + (Pn.spreadNear - Pn.spreadFar) * d.exposure) *
+          (d.variant === "suppressor"
+            ? Pn.suppSpread
+            : Pn.spreadFar + (Pn.spreadNear - Pn.spreadFar) * d.exposure) *
           (1 + i.playerSpeed * 0.45) *
           (_ ? 1.5 : 1);
         (Bs.x += (o() - 0.5) * 2 * Y),
@@ -1208,6 +1277,9 @@ var Kv = {
     lungeSpeed: 9.5,
     replan: 0.6,
     smokeBelow: 0.4,
+    shieldMax: 90,
+    rageSpeedMul: 1.45,
+    rageCooldownMul: 0.65,
   },
   Gt = Kv,
   ni = $v,
@@ -1269,6 +1341,15 @@ function iM(i, e, t, n) {
     m = {
       id: 0,
       type: "hound",
+      variant: "standard",
+      flank: 0,
+      role: "free",
+      tac: "flank",
+      tacT: 0,
+      shield: 0,
+      shieldMax: 0,
+      ePhase: "shield",
+      shieldT: 0,
       pos: a.group.position,
       alive: !1,
       hp: Gt.hp,
@@ -1344,6 +1425,20 @@ function iM(i, e, t, n) {
       maxSpeed: Gt.patrolSpeed,
       damage(T, D, C, G) {
         if (!m.alive) return !1;
+        if (m.variant === "elite" && m.shield > 0) {
+          (m.shield -= T),
+            (m.shieldT = 0.18),
+            (m.flare = 1),
+            s.events.emit("enemy:hit", { enemy: m, point: D, part: "shield" }),
+            s.fx.sparks(m.pos, jv, 12);
+          if (m.shield <= 0) {
+            (m.shield = 0),
+              (m.ePhase = "rage"),
+              s.fx.sparks(m.pos, jv, 20),
+              s.events.emit("enemy:telegraph", { enemy: m, type: "hound", time: 0.4, pos: m.pos, elite: !0 });
+          }
+          return i.provoke(m), !1;
+        }
         if (
           ((m.hp -= T), s.events.emit("enemy:hit", { enemy: m, point: D, part: G || "body" }), C)
         ) {
@@ -1402,6 +1497,15 @@ function iM(i, e, t, n) {
           (m.dieT = 0),
           (m.tyaw = m.hyaw = 0),
           (m.tpitch = m.hpitch = 0);
+        (m.variant = D.variant || "standard"),
+        (m.flank = 0),
+        (m.role = "free"),
+        (m.tac = "flank"),
+        (m.tacT = 0),
+        (m.shield = m.variant === "elite" ? Gt.shieldMax : 0),
+        (m.shieldMax = Gt.shieldMax),
+        (m.ePhase = "shield"),
+        (m.shieldT = 0);
         for (let C of [m.sY, m.sP, m.sR, m.sL, m.sA, m.sA2]) (C.x = 0), (C.v = 0);
         for (let C = 0; C < 4; C++) A(b[C].p, C, m.pos.x, m.pos.z, m.yaw);
         if (
@@ -1536,7 +1640,7 @@ function iM(i, e, t, n) {
     }
     let N = Math.atan2(m.pos.z - T.pos.z, m.pos.x - T.pos.x);
     for (let Q = 0; Q < 5; Q++) {
-      let K = N + (o() - 0.5) * 2.6,
+      let K = N + m.flank * 0.85 + (o() - 0.5) * 1.7,
         ie = Gt.rangeMin + 1 + o() * (Gt.rangeMax - Gt.rangeMin - 2);
       Io.set(T.pos.x + Math.cos(K) * ie, T.pos.y, T.pos.z + Math.sin(K) * ie),
         (Io.y = s.physics.groundHeight(Io.x, Io.z, T.pos.y + 1)),
@@ -1550,6 +1654,70 @@ function iM(i, e, t, n) {
       (m.moveT = 0),
       (m.bursts = 0);
   }
+  function taCover() {
+    let T = s.player;
+    if (!T) return null;
+    let fy = T.yaw ?? 0,
+      fx = Math.sin(fy),
+      fz = Math.cos(fy),
+      cur = Math.hypot(m.pos.x - T.pos.x, m.pos.z - T.pos.z),
+      best = null,
+      bestD = 1 / 0,
+      C = T.eye || T.pos,
+      G = (Q) => {
+        if (!Q) return;
+        let ie = Math.hypot(Q.x - T.pos.x, Q.z - T.pos.z);
+        if (ie > cur - 1.5 || ie < Gt.rangeMin) return;
+        if (s.physics.nav.isWalkable && !s.physics.nav.isWalkable(Q.x, Q.z)) return;
+        let F = ie + Math.hypot(Q.x - m.pos.x, Q.z - m.pos.z) * 0.7 + o() * 2,
+          X = Q.x - T.pos.x,
+          ne = Q.z - T.pos.z,
+          side = fz * X - fx * ne;
+        m.flank && Math.sign(side) !== m.flank && (F += 12),
+          Vf.set(Q.x, Q.y + 0.95, Q.z),
+          s.physics.lineOfSight(Vf, C) || (F += 18),
+          F < bestD && ((bestD = F), (best = Q));
+      },
+      j = s.level && s.level.coverPoints;
+    if (j) for (let Q = 0; Q < j.length; Q++) G(j[Q]);
+    Io.set(
+      m.pos.x + (T.pos.x - m.pos.x) * 0.4,
+      0,
+      m.pos.z + (T.pos.z - m.pos.z) * 0.4,
+    );
+    for (let Q = 0; Q < 6; Q++) {
+      let K = s.physics.nav.randomPoint(Io, Math.max(4, cur * 0.35));
+      K && ((K.y = s.physics.groundHeight(K.x, K.z, T.pos.y + 1)), G(K));
+    }
+    return best;
+  }
+  function taStart() {
+    let T = s.player;
+    if (!T) return;
+    let K = Math.hypot(T.pos.x - m.pos.x, T.pos.z - m.pos.z);
+    if (K < Gt.rangeMin + 1) {
+      (m.tac = "hold"), (m.tacT = 1.5);
+      return;
+    }
+    let cp = taCover();
+    if (cp) {
+      m.firePos.copy(cp);
+      m.firePlayer.copy(T.pos);
+      _(m.firePos, !0);
+      (m.es = "move"), (m.esT = 0), (m.moveT = 0), (m.bursts = 0);
+    } else (m.tac = "hold"), (m.tacT = 1.2 + o() * 1.8), w();
+  }
+  function ta(T) {
+    let D = s.player;
+    if (!D || D.alive === !1) return;
+    m.tacT -= T;
+    let idle = m.es === "aim" || m.es === "cool";
+    if (m.tac === "flank") m.tacT <= 0 && idle && ((m.tac = "advance"), taStart());
+    else if (m.tac === "hold") {
+      let K = Math.hypot(D.pos.x - m.pos.x, D.pos.z - m.pos.z);
+      K > Gt.rangeMin + 1 && m.tacT <= 0 && idle && ((m.tac = "advance"), taStart());
+    }
+  }
   function S(T) {
     let D = s.player,
       C = i.t;
@@ -1562,8 +1730,8 @@ function iM(i, e, t, n) {
         (m.path = null),
         (m.waitT = 0),
         m.mode === "engage"
-          ? w()
-          : (m.es === "tele" || m.es === "burst") && (i.releaseToken(m), (m.es = "move"))),
+          ? ((m.tac = "flank"), (m.tacT = 1 + o() * 1.2), w())
+          : ((m.tac = "flank"), (m.es === "tele" || m.es === "burst") && (i.releaseToken(m), (m.es = "move")))),
       (m.wantYaw = m.yaw),
       (m.maxSpeed = 0),
       (m.cool -= T),
@@ -1592,7 +1760,7 @@ function iM(i, e, t, n) {
           (m.wantYaw = m.yaw + Math.sin(m.scan * 0.8) * 0.9),
           (j = null));
     } else if (D) {
-      (G = D.pos), (j = D.pos);
+      (G = D.pos), (j = D.pos), ta(T);
       let I = Math.atan2(D.pos.x - m.pos.x, D.pos.z - m.pos.z);
       switch (
         ((m.es === "move" || m.es === "aim" || m.es === "cool") &&
@@ -1613,10 +1781,13 @@ function iM(i, e, t, n) {
       ) {
         case "move": {
           m.moveT += T;
-          let se = E(T, Gt.runSpeed),
+          let se = E(T, Gt.runSpeed * (m.variant === "elite" && m.ePhase === "rage" ? Gt.rageSpeedMul : 1)),
             ae = K > Gt.rangeMin - 1 && K < Gt.rangeMax + 2;
           se || (m.moveT > 1.4 && m.los && ae && o() < T * 0.7) || m.moveT > 7
-            ? ((m.es = "aim"), (m.esT = 0), (m.hasGoal = !1))
+            ? (m.tac === "advance" && ((m.tac = "hold"), (m.tacT = 1.1 + o() * 1.8)),
+              (m.es = "aim"),
+              (m.esT = 0),
+              (m.hasGoal = !1))
             : D.pos.distanceToSquared(m.firePlayer) > 49 && w();
           break;
         }
@@ -1658,9 +1829,13 @@ function iM(i, e, t, n) {
             m.esT <= 0 && ((m.esT = Gt.burstGap), m.shots--, z(D)),
             m.shots <= 0 &&
               (i.releaseToken(m),
-              (m.cool = Gt.cooldown[0] + o() * (Gt.cooldown[1] - Gt.cooldown[0])),
+              (m.cool =
+                (Gt.cooldown[0] + o() * (Gt.cooldown[1] - Gt.cooldown[0])) *
+                (m.variant === "elite" && m.ePhase === "rage" ? Gt.rageCooldownMul : 1)),
               m.bursts++,
-              m.bursts >= 1 + (o() < 0.4 ? 1 : 0) ? w() : ((m.es = "cool"), (m.esT = 0)));
+              m.bursts >= 1 + (o() < 0.4 ? 1 : 0)
+                ? (m.tac === "hold" ? ((m.es = "cool"), (m.esT = 0)) : w())
+                : ((m.es = "cool"), (m.esT = 0)));
           break;
         }
         case "wind": {
@@ -1781,8 +1956,9 @@ function iM(i, e, t, n) {
     (m.hyaw += (Y - m.hyaw) * oe), (m.hpitch += (L - m.hpitch) * oe), O(T);
     let fe = (i.t * (m.mode === "patrol" ? 0.8 : 2.2) + m.phase) % 1;
     l.beacon.scale.setScalar(fe < 0.12 || (fe > 0.22 && fe < 0.3) ? 1 : 1e-4);
-    let le = m.mode === "engage" ? NC : _m,
-      R = 1 + m.flare * 3.5;
+    let le = m.mode === "engage" ? NC : _m;
+    m.variant === "elite" && m.shield > 0 && (le = [3, 9, 14]);
+    let R = 1 + m.flare * 3.5;
     for (let I = 0; I < 3; I++) m.lensC[I] += (le[I] - m.lensC[I]) * (1 - Math.exp(-8 * T));
     r.color.setRGB(m.lensC[0] * R, m.lensC[1] * R, m.lensC[2] * R),
       (m.flare = Math.max(0, m.flare - T * 2)),
@@ -2224,6 +2400,32 @@ async function Em(i) {
             j.pos.distanceToSquared(T) > D * D ||
             (j.lastKnown.copy(C), (j.mode = "investigate"), (j.modeT = 9 + e() * 4));
       },
+      squadAssign() {
+        let D = i.player;
+        if (!D) return;
+        let engaged = [];
+        for (let j of t) j.alive && !j.passive && j.mode === "engage" && engaged.push(j);
+        if (engaged.length < 2) return;
+        let fy = D.yaw ?? 0,
+          fx = Math.sin(fy),
+          fz = Math.cos(fy);
+        engaged.sort(
+          (p, q) => Math.atan2(p.pos.x - D.pos.x, p.pos.z - D.pos.z) - Math.atan2(q.pos.x - D.pos.x, q.pos.z - D.pos.z),
+        );
+        let neg = 0,
+          pos = 0;
+        for (let j of engaged) {
+          let dx = j.pos.x - D.pos.x,
+            dz = j.pos.z - D.pos.z,
+            side = fz * dx - fx * dz;
+          j.flank = side > 2 ? 1 : side < -2 ? -1 : j.flank || 0;
+          j.role =
+            j.variant === "suppressor" ? "suppressor" : j.variant === "env" ? "flanker" : j.variant === "elite" ? "anchor" : "flanker";
+          j.flank < 0 ? neg++ : j.flank > 0 && pos++;
+        }
+        if ((!neg || !pos) && engaged.length >= 2)
+          for (let k = 0; k < engaged.length; k++) engaged[k].flank = k % 2 ? 1 : -1;
+      },
       provoke(T) {
         let D = i.player;
         !D ||
@@ -2250,7 +2452,8 @@ async function Em(i) {
           G.pos.copy(T),
           G.dir.copy(D),
           G.from.copy(T),
-          (G.len = 0));
+          (G.len = 0),
+          (G.dmg = C && C.variant === "suppressor" ? Pn.suppDamage : Pn.boltDamage));
       },
       addWreck(T) {
         for (n.push(T); n.length > Ui.maxWrecks; ) {
@@ -2320,7 +2523,7 @@ async function Em(i) {
           HC(j.pos, oM, cM, uM) < 0.36 * 0.36 && (ie = !0)),
         ie)
       ) {
-        D.damage(Ui.gull.boltDamage, j.from), (j.on = !1);
+        D.damage(j.dmg ?? Ui.gull.boltDamage, j.from), (j.on = !1);
         continue;
       }
       if (Q) {
@@ -2463,6 +2666,7 @@ async function Em(i) {
           let C = D.vel ? Math.hypot(D.vel.x, D.vel.z) : D.speed || 0;
           h.playerSpeed += (C - h.playerSpeed) * (1 - Math.exp(-6 * T));
         }
+        h.squadAssign();
         for (let C = t.length - 1; C >= 0; C--) t[C]._update(T);
         _(T), H(T);
       },
@@ -2544,6 +2748,14 @@ async function VC(i) {
       (s = [2.1, 1, 2.3]),
       (o = [0.5, 0.62, 0.4]),
       (r = 1.25);
+  else if (n === "squad")
+    e.spawn("hound", t(-8, 0, -10), { state: "alert" }),
+      e.spawn("hound", t(8, 0, -9), { state: "alert", variant: "elite" }),
+      e.spawn("gull", t(-6, 6, -13), { state: "alert", variant: "suppressor" }),
+      e.spawn("gull", t(7, 5, -12), { state: "alert", variant: "env" }),
+      (s = [6, 3, 12]),
+      (o = [0, 2.2, -5]),
+      (r = 7);
   else if (n === "fight")
     e.spawn("hound", t(-7, 0, -9), { state: "alert" }),
       e.spawn("hound", t(8, 0, -7), { state: "alert" }),

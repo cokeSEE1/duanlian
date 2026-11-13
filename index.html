@@ -14088,6 +14088,7 @@ ${fe}`,
       sharpen: 0.3,
       lookPower: 1.18,
       lookSat: 1.22,
+      taaFeedback: 0.12,
     },
     x = !1;
   try {
@@ -14095,10 +14096,35 @@ ${fe}`,
   } catch {
     x = !1;
   }
+  const taaFrag = `${Js}
+uniform sampler2D tColor, tHistory, tDepth; uniform mat4 uInvViewProj, uPrevViewProj; uniform vec2 uRes; uniform float uFeedback;
+void main(){
+vec4 cur = texture2D(tColor, vUv);
+float d = texture2D(tDepth, vUv).r;
+if (d < ${n1} || d >= 0.9999) { gl_FragColor = cur; return; }
+vec4 wp = uInvViewProj * vec4(vUv * 2.0 - 1.0, d * 2.0 - 1.0, 1.0); wp /= wp.w;
+vec4 pc = uPrevViewProj * wp;
+vec2 puv = pc.xy / max(pc.w, 1e-4) * 0.5 + 0.5;
+if (pc.w <= 0.0 || puv.x < 0.0 || puv.x > 1.0 || puv.y < 0.0 || puv.y > 1.0) { gl_FragColor = cur; return; }
+vec3 hist = texture2D(tHistory, puv).rgb;
+vec3 mn = cur.rgb, mx = cur.rgb;
+for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) {
+  vec3 c = texture2D(tColor, vUv + vec2(float(x), float(y)) / uRes).rgb;
+  mn = min(mn, c); mx = max(mx, c);
+}
+vec3 box = (mn + mx) * 0.5, halfRange = (mx - mn) * 0.5 + vec3(1e-4);
+hist = clamp(hist, box - halfRange, box + halfRange);
+gl_FragColor = vec4(mix(cur.rgb, hist, uFeedback), 1.0);
+}`,
+    blitFrag = `${Js}
+uniform sampler2D tSrc;
+void main(){ gl_FragColor = vec4(texture2D(tSrc, vUv).rgb, 1.0); }`;
   let y = {
       scene: p(c, h),
       motion: p(c, h),
+      taa: [p(c, h), p(c, h)],
       ldr: p(u, h),
+      final: p(u, h),
       depthHalf: x ? p(as, f, { format: J0 }) : p(c, f),
       aoA: p(u, f),
       aoB: p(u, f),
@@ -14287,12 +14313,24 @@ ${fe}`,
       uSharpen: { value: g.sharpen },
       uFxaa: { value: 1 },
     }),
+    taaM = a("taa", taaFrag, {
+      tColor: { value: null },
+      tHistory: { value: null },
+      tDepth: { value: null },
+      uInvViewProj: { value: new Ye() },
+      uPrevViewProj: { value: new Ye() },
+      uRes: { value: new Ae() },
+      uFeedback: { value: 0.1 },
+    }),
+    blitM = a("blit", blitFrag, { tSrc: { value: null } }),
     ie = new Ye(),
     F = new Ye(),
     X = new Ye(),
     ne = new W(),
     re = new W(),
-    $ = !1;
+    $ = !1,
+    taaN = 0,
+    ta = 0;
   function ue() {
     let oe = Math.max(6, d().volSteps | 0),
       fe = d().name === "test" || d().name === "low" ? 8 : d().name === "ultra" ? 16 : 12;
@@ -14310,6 +14348,9 @@ ${fe}`,
       y.scene.setSize(oe, fe),
       y.motion.setSize(oe, fe),
       y.ldr.setSize(oe, fe),
+      y.taa[0].setSize(oe, fe),
+      y.taa[1].setSize(oe, fe),
+      y.final.setSize(oe, fe),
       y.depthCopy)
     ) {
       y.depthCopy.setSize(oe, fe);
@@ -14426,7 +14467,8 @@ ${fe}`,
         q.uniforms.uDir.value.set(0, We),
         l(q, y.volA);
     }
-    {
+    let xe;
+    if (Ne || dt) {
       let be = U.uniforms;
       (be.tColor.value = oe.texture),
         (be.tDepth.value = Fe),
@@ -14436,14 +14478,27 @@ ${fe}`,
         (be.uAoOn.value = Ne ? 1 : 0),
         (be.uVolOn.value = dt ? 1 : 0),
         l(U, y.scene);
+      xe = y.scene.texture;
+    } else xe = oe.texture;
+    ie.multiplyMatrices(fe.projectionMatrix, fe.matrixWorldInverse);
+    if (ve.name !== "test" && ve.name !== "low" && !(e.params && e.params.taa === "0") && $ && R > 0) {
+      let be = taaM.uniforms;
+      (be.tColor.value = xe),
+        (be.tHistory.value = y.taa[ta].texture),
+        (be.tDepth.value = Fe),
+        be.uInvViewProj.value.copy(X.copy(ie).invert()),
+        be.uPrevViewProj.value.copy(F),
+        be.uRes.value.set(M.w, M.h),
+        (be.uFeedback.value = taaN === 0 ? 0 : g.taaFeedback),
+        l(taaM, y.taa[1 - ta]),
+        (xe = y.taa[1 - ta].texture),
+        (ta = 1 - ta),
+        taaN++;
     }
-    let xe = y.scene.texture;
-    if (
-      (ie.multiplyMatrices(fe.projectionMatrix, fe.matrixWorldInverse),
-      ve.motionBlur && $ && R > 0)
-    ) {
+    if (ve.motionBlur && $ && R > 0) {
       let be = T.uniforms;
-      (be.tDepth.value = Fe),
+      (be.tColor.value = xe),
+        (be.tDepth.value = Fe),
         be.uInvViewProj.value.copy(X.copy(ie).invert()),
         be.uPrevViewProj.value.copy(F),
         (be.uShutter.value = Math.min(0.5, 1 / 190 / Math.max(R, 0.001))),
@@ -14532,8 +14587,9 @@ ${fe}`,
       be.uTexel.value.set(1 / M.w, 1 / M.h),
         (be.uTime.value = ae),
         (be.uGrain.value = g.grain),
-        (be.uSharpen.value = g.sharpen),
-        l(K, null);
+        (be.uSharpen.value = g.sharpen);
+      if (M.w === i.domElement.width && M.h === i.domElement.height) l(K, null);
+      else (l(K, y.final), (blitM.uniforms.tSrc.value = y.final.texture), l(blitM, null));
     }
   }
   let V = (oe) => (oe > 0 ? (oe < 1 ? oe : 1) : 0);
@@ -14551,6 +14607,8 @@ ${fe}`,
       y.streakA,
       y.streakB,
       y.dirt,
+      ...y.taa,
+      y.final,
       ...y.down,
       ...y.up,
       ...y.adapt,
@@ -14822,7 +14880,37 @@ async function Hg(i) {
     },
     U = { calls: 0, tris: 0 },
     T = 0,
-    D = 0;
+    D = 0,
+    taaJx = 0,
+    taaJy = 0,
+    taaJActive = !1;
+  function taaHalton(base, index) {
+    let f = 0,
+      d = 1;
+    for (let n = index; n > 0; n = Math.floor(n / base)) (d /= base), (f += d * (n % base));
+    return f;
+  }
+  function taaApplyJitter() {
+    let sw = A.size.w,
+      sh = A.size.h,
+      hx = taaHalton(2, T) - 0.5,
+      hy = taaHalton(3, T) - 0.5,
+      ox = (hx * 2) / sw,
+      oy = (hy * 2) / sh;
+    a.projectionMatrix.elements[8] += ox;
+    a.projectionMatrix.elements[9] += oy;
+    l.projectionMatrix.elements[8] += ox;
+    l.projectionMatrix.elements[9] += oy;
+    (taaJx += ox), (taaJy += oy), (taaJActive = !0);
+  }
+  function taaClearJitter() {
+    if (!taaJActive) return;
+    a.projectionMatrix.elements[8] -= taaJx;
+    a.projectionMatrix.elements[9] -= taaJy;
+    l.projectionMatrix.elements[8] -= taaJx;
+    l.projectionMatrix.elements[9] -= taaJy;
+    (taaJx = 0), (taaJy = 0), (taaJActive = !1);
+  }
   function C() {
     a.updateMatrixWorld(!0),
       (l.matrixAutoUpdate = !1),
@@ -14845,6 +14933,11 @@ async function Hg(i) {
       (n.toneMappingExposure = 1),
       n.setRenderTarget(m),
       n.clear(!0, !0, !1),
+      taaClearJitter(),
+      i.quality.name !== "test" &&
+        i.quality.name !== "low" &&
+        e.taa !== "0" &&
+        taaApplyJitter(),
       (i.quality.name === "ultra" || e.shot || (T & 1) === 0 || !h.shadow.map) &&
         (n.shadowMap.needsUpdate = !0),
       n.render(r, a),
@@ -14869,22 +14962,20 @@ async function Hg(i) {
     } finally {
       s.depthRange(0, 1), (r.environmentIntensity = F), (r.environment = X);
     }
-    if (
-      (A.run({
-        hdr: m,
-        camera: a,
-        sun: h,
-        dt: ie,
-        post: N.post,
-        exposure: N.exposure,
-        time: i.time ? i.time.t : T / 60,
-        fast: M,
-        thunder: w.value,
-      }),
-      n.setRenderTarget(null),
-      o.post)
-    )
-      throw new Error("a post shader failed to compile");
+    A.run({
+      hdr: m,
+      camera: a,
+      sun: h,
+      dt: ie,
+      post: N.post,
+      exposure: N.exposure,
+      time: i.time ? i.time.t : T / 60,
+      fast: M,
+      thunder: w.value,
+    });
+    taaClearJitter();
+    n.setRenderTarget(null);
+    if (o.post) throw new Error("a post shader failed to compile");
   }
   let N = {
       renderer: n,
@@ -15032,6 +15123,7 @@ async function Hg(i) {
             j(ie);
           } catch (ne) {
             _ = !1;
+            taaClearJitter();
             try {
               s.depthRange(0, 1), n.setRenderTarget(null);
             } catch {}
@@ -15069,9 +15161,13 @@ async function Hg(i) {
       re = F.min.y + Math.min(2.4, (F.max.y - F.min.y) * 0.4);
     if (!Q) {
       let ee = new D0(128, { type: js, generateMipmaps: !1 });
-      (Q = { cubeRT: ee, cam: new z0(0.15, 300, ee), pmrem: new ia(n), out: null }),
+      (Q = { cubeRT: ee, cam: new z0(0.15, 300, ee), pmrem: new ia(n), out: null, bakeKey: "", bakeAt: 0 }),
         Q.cam.layers.set(vf);
     }
+    let bk = X.toFixed(2) + "|" + re.toFixed(2) + "|" + ne.toFixed(2),
+      tm = performance.now();
+    if (Q.bakeKey === bk || (Q.bakeAt && tm - Q.bakeAt < 500)) return;
+    (Q.bakeKey = bk), (Q.bakeAt = tm);
     Q.cam.position.set(X, re, ne), Q.cam.updateMatrixWorld(!0);
     let $ = n.toneMapping;
     (n.toneMapping = ys), (u.material.uniforms.uEnv.value = 1), (n.shadowMap.needsUpdate = !0);
@@ -25634,6 +25730,89 @@ function hR(i) {
     i.decal("rust_run", 1, 9, 3.2, no.Z1 + 0.064, "z+"),
     i.decal("grime_streak", 1.2, -14, 3.9, no.Z1 + 0.064, "z+");
 }
+function hR1(i) {
+  let e = i.place, t = i.stack;
+  // 横贯壁垒：东西向 1 层集装箱长墙（顶部 2.59 可走），南北两列 + 角部高层掩体
+  t(-14, 12, [[40, "green"]]), t(-1.8, 12, [[40, "blue"]]), t(10.4, 12, [[40, "orange"]]),
+    t(-14, 22, [[40, "teal"]]), t(-1.8, 22, [[40, "grey"]]);
+  t(-16, 26, [[20, "red"], [20, "yellow"]]), t(8, 26, [[40, "white"], [40, "green"]]);
+  i.stairs(-21.6, 12, 0, 0, { seed: 30 }),
+    i.stairs(-21.6, 22, 0, 0, { seed: 31 });
+  i.catwalk(-7.9, 12, 0, 2.54, { seed: 32 }),
+    i.catwalk(4.3, 12, 0, 2.54, { seed: 33 }),
+    i.catwalk(-7.9, 22, 0, 2.54, { seed: 34 }),
+    i.catwalk(-14, 15, ts, 2.54, { seed: 35 }),
+    i.catwalk(-14, 17.5, ts, 2.54, { seed: 36 }),
+    i.catwalk(-14, 20, ts, 2.54, { seed: 37 }),
+    i.catwalk(-1.8, 15, ts, 2.54, { seed: 38 }),
+    i.catwalk(-1.8, 17.5, ts, 2.54, { seed: 39 }),
+    i.catwalk(-1.8, 20, ts, 2.54, { seed: 40 });
+  for (let s of [-14, -1.8])
+    for (let o of [10, 14, 18, 24]) i.rod("steel_galv", [s, 0, o], [s, 2.59, o], 0.04);
+  e("sandbags", -1.8, 12, 0, { seed: 41 }, 2.59),
+    e("crate_wood", -1.8, 22, 0.1, { seed: 42 }, 2.59),
+    e("barrel", -14, 12, 0, { seed: 43, color: "blue" }, 2.59),
+    e("barrel", 10.4, 12, 0, { seed: 44 }, 2.59);
+  e("jersey_barrier", -21.4, -6.2, 0.05, { seed: 1 }),
+    e("sandbags", -20.8, 2.2, 0.2, { seed: 2 }),
+    e("tire_stack", -21.6, 14.2, 0, { seed: 3 }),
+    e("dumpster", -21.8, 20.6, 0, { seed: 4 }),
+    e("pallet_stack", -20.4, 26.2, 0.08, { seed: 5 }),
+    e("pipe_stack", -18.2, -8.2, 0.03, { seed: 6 }),
+    e("cable_reel", -17.2, -8.6, 0.3, { seed: 7 }),
+    e("ibc_tote", 14.6, -6.4, 0.05, { seed: 8 }),
+    e("tire_stack", 14.6, 6.4, 0, { seed: 9 }),
+    e("crate_stack", 14.4, 16.4, 0.05, { seed: 10 }),
+    e("tarp_cargo", 14.6, 24.2, 0.06, { seed: 11 }),
+    e("gas_cylinders", 14.2, 28.2, 0, { seed: 12 }),
+    e("light_mast", -20.4, 8.4, 0, { seed: 13 }),
+    e("light_mast", -20.4, 22.4, 0, { seed: 14 }),
+    e("light_mast", 14.4, 10.4, 0, { seed: 15 }),
+    e("light_mast", 14.4, 24.4, 0, { seed: 16 });
+  return { relayPos: new W(-1.8, 2.59, 12), vantage: { stairsFoot: mt(-21.6, 0, 12), roof: mt(-1.8, 2.59, 12) } };
+}
+function hR2(i) {
+  let e = i.place, t = i.stack;
+  // 堡垒环：四面 1 层集装箱围墙 + 中央天井 + 中央高层掩体
+  t(-12, -2, [[40, "grey"]]), t(0.4, -2, [[40, "blue"]]),
+    t(-12, 20, [[40, "green"]]), t(0.4, 20, [[40, "orange"]]);
+  t(-18, 9, [[40, "teal"]], ts), t(7, 9, [[40, "red"]], ts);
+  t(3, 9, [[20, "white"], [20, "yellow"]]);
+  i.stairs(-19.5, -2, 0, 0, { seed: 30 }),
+    i.stairs(-19.5, 20, 0, 0, { seed: 31 }),
+    i.stairs(-18, 16.6, ts, 0, { seed: 32 }),
+    i.stairs(7, 16.6, ts, 0, { seed: 33 });
+  i.catwalk(-5.9, -2, 0, 2.54, { seed: 34 }),
+    i.catwalk(-5.9, 20, 0, 2.54, { seed: 35 }),
+    i.catwalk(-18, 3.5, ts, 2.54, { seed: 36 }),
+    i.catwalk(-18, 14.5, ts, 2.54, { seed: 37 }),
+    i.catwalk(7, 3.5, ts, 2.54, { seed: 38 }),
+    i.catwalk(7, 14.5, ts, 2.54, { seed: 39 });
+  for (let s of [-12, 0.4])
+    for (let o of [-4, 2, 8, 14, 22]) i.rod("steel_galv", [s, 0, o], [s, 2.59, o], 0.04);
+  for (let s of [-18, 7])
+    for (let o of [1, 9, 17]) i.rod("steel_galv", [s, 0, o], [s, 2.59, o], 0.04);
+  e("sandbags", -5.9, -2, 0, { seed: 40 }, 2.59),
+    e("crate_wood", -8, 9, 0.1, { seed: 41 }),
+    e("barrel", -12, 20, 0, { seed: 42, color: "blue" }, 2.59);
+  e("jersey_barrier", -21.4, -6.2, 0.05, { seed: 1 }),
+    e("sandbags", -20.8, -4.4, 0.2, { seed: 2 }),
+    e("tire_stack", -21.6, 6.2, 0, { seed: 3 }),
+    e("dumpster", -21.8, 16.2, 0, { seed: 4 }),
+    e("pallet_stack", -20.4, 24.2, 0.08, { seed: 5 }),
+    e("pipe_stack", -18.2, -8.2, 0.03, { seed: 6 }),
+    e("cable_reel", -17.2, -8.6, 0.3, { seed: 7 }),
+    e("ibc_tote", 14.6, -6.4, 0.05, { seed: 8 }),
+    e("tire_stack", 14.6, 6.4, 0, { seed: 9 }),
+    e("crate_stack", 14.4, 16.4, 0.05, { seed: 10 }),
+    e("tarp_cargo", 14.6, 24.2, 0.06, { seed: 11 }),
+    e("gas_cylinders", 14.2, 28.2, 0, { seed: 12 }),
+    e("light_mast", -20.4, 8.4, 0, { seed: 13 }),
+    e("light_mast", -20.4, 22.4, 0, { seed: 14 }),
+    e("light_mast", 14.4, 10.4, 0, { seed: 15 }),
+    e("light_mast", 14.4, 24.4, 0, { seed: 16 });
+  return { relayPos: new W(-5.9, 2.59, -2), vantage: { stairsFoot: mt(-19.5, 0, -2), roof: mt(-5.9, 2.59, -2) } };
+}
 function fR(i) {
   let e = i.place,
     t = -38,
@@ -25735,11 +25914,17 @@ function fR(i) {
 async function C1(i) {
   let e = new wt();
   (e.name = "level"), i.scene.add(e);
-  let t = ob(i);
-  hR(t), fR(t);
+  let t = ob(i),
+    wL = Math.max(0, Math.min(2, +(i.params && i.params.layout) || 0)),
+    wY = {
+      relayPos: mt(1.5, 0, 7.5),
+      vantage: { stairsFoot: mt(-2.2, 0, 12.4), roof: mt(13.5, 2.59, 12.4) },
+    };
+  wL === 1 ? (wY = hR1(t)) : wL === 2 ? (wY = hR2(t)) : hR(t);
+  fR(t);
   let n = ab(t),
     s = cb(t),
-    o = t.place("relay_node", 1.5, 7.5, 0.35, { seed: 1 }, 0),
+    o = t.place("relay_node", wY.relayPos.x, wY.relayPos.z, 0.35, { seed: 1 }, wY.relayPos.y),
     r = t.place("relay_node", n.relayPos.x, n.relayPos.z, ts * 0.9, { seed: 2 }, no.FLOOR),
     a = t.place("relay_node", s.relayPos.x, s.relayPos.z, -0.2, { seed: 3 }, 0);
   Lr(
@@ -25821,7 +26006,7 @@ async function C1(i) {
   });
   let d = { pos: mt(-32, 0, 6), yaw: -ts },
     v = [
-      { id: "relay_a", label: "甲号中继 · 堆场", zone: "yard", pos: mt(1.5, 0, 7.5), object: o },
+      { id: "relay_a", label: "甲号中继 · 堆场", zone: "yard", pos: wY.relayPos.clone(), object: o },
       {
         id: "relay_b",
         label: "乙号中继 · 仓库",
@@ -25974,6 +26159,138 @@ async function C1(i) {
             }
           }
     };
+  if (wL === 1) {
+    // 横贯壁垒：出生/掩体按南北两列长墙 + 角部高层掩体重配，shed/quay/gate 沿用原布局
+    y = [
+      ...y.filter((q) => q.zone !== "yard"),
+      g(-19, -1.4, "yard"),
+      g(-8, 3, "yard"),
+      g(3.5, -1.6, "yard"),
+      g(12, 5, "yard"),
+      g(-21.6, 6, "yard"),
+      g(-14, 16, "yard"),
+      g(-1.8, 16, "yard"),
+      g(6, 16, "yard"),
+      g(14.2, 16.4, "yard"),
+      g(-10, 26, "yard"),
+      g(-20, 26, "yard"),
+      g(0, 28, "yard"),
+      x(-16, 9, 14, "yard"),
+      x(2, 10, 17, "yard"),
+      x(10, 8, 20, "yard"),
+      x(-4, 12, 24, "yard"),
+      x(6, 9, 26, "yard"),
+    ];
+    _ = [
+      ..._.filter((q) => q.x < -24 || q.x > 16 || q.z < -10 || q.z > 30),
+      mt(-19.2, 0, 4.7),
+      mt(-17.4, 0, 4.9),
+      mt(-12.5, 0, 7.2),
+      mt(-9.3, 0, 6.4),
+      mt(-6.3, 0, 7.3),
+      mt(-2.9, 0, 6.1),
+      mt(-2.9, 0, 4.5),
+      mt(5.6, 0, 5.8),
+      mt(5.6, 0, 4.2),
+      mt(9.2, 0, 4.4),
+      mt(7.5, 0, 7.7),
+      mt(12.9, 0, 8.8),
+      mt(11.6, 0, 4.9),
+      mt(-13.5, 0, -1.5),
+      mt(-9.6, 0, -0.7),
+      mt(7.8, 0, -1.5),
+      mt(-4.2, 0, -2.2),
+      mt(-0.9, 0, -6.7),
+      mt(-6.7, 0, -7),
+      mt(1.2, 0, -8.9),
+      mt(-2.2, 0, 10.4),
+      mt(5, 0, 8.9),
+      mt(-4.8, 0, 10.6),
+      mt(-1, 0, 13.6),
+      mt(-8.1, 0, 15.4),
+      mt(-14, 0, 16),
+      mt(-1.8, 0, 16),
+      mt(0.6, 0, 16.9),
+      mt(4.2, 0, 15.7),
+      mt(6, 0, 16),
+      mt(-16, 0, 15.6),
+      mt(12, 0, 17.2),
+      mt(-20, 0, 26),
+      mt(-10, 0, 26),
+      mt(-6, 0, 26),
+      mt(0, 0, 26),
+      mt(-16, 0, 28),
+      mt(0, 0, 28),
+      mt(8, 0, 28),
+      mt(-14, 2.59, 12),
+      mt(-1.8, 2.59, 12),
+      mt(10.4, 2.59, 12),
+      mt(-14, 2.59, 22),
+      mt(-1.8, 2.59, 22),
+    ];
+  } else if (wL === 2) {
+    // 堡垒环：出生/掩体绕四墙外侧、中央天井与墙顶走道分布
+    y = [
+      ...y.filter((q) => q.zone !== "yard"),
+      g(-6, -6, "yard"),
+      g(6, -6, "yard"),
+      g(-18, -5, "yard"),
+      g(12, -5, "yard"),
+      g(-14, 4, "yard"),
+      g(-6, 4, "yard"),
+      g(0, 2, "yard"),
+      g(-14, 14, "yard"),
+      g(-6, 16, "yard"),
+      g(2, 14, "yard"),
+      g(-16, 26, "yard"),
+      g(0, 26, "yard"),
+      g(14, 26, "yard"),
+      g(12, 4, "yard"),
+      g(12, 12, "yard"),
+      g(-21, 6, "yard"),
+      g(-21, 14, "yard"),
+      x(-6, 9, 9, "yard"),
+      x(-18, 8, 9, "yard"),
+      x(7, 8, 9, "yard"),
+      x(0, 9, 20, "yard"),
+      x(0, 9, -2, "yard"),
+      x(-12, 10, 26, "yard"),
+    ];
+    _ = [
+      ..._.filter((q) => q.x < -24 || q.x > 16 || q.z < -10 || q.z > 30),
+      mt(-13.5, 0, -6),
+      mt(-6, 0, -7),
+      mt(0, 0, -6.7),
+      mt(6, 0, -7),
+      mt(12, 0, -5),
+      mt(-18, 0, -5),
+      mt(-21, 0, 6),
+      mt(-21, 0, 14),
+      mt(-20, 0, 24),
+      mt(-14, 0, 4),
+      mt(-10, 0, 8),
+      mt(-6, 0, 4),
+      mt(0, 0, 2),
+      mt(0, 0, 6),
+      mt(-14, 0, 14),
+      mt(-10, 0, 16),
+      mt(-6, 0, 16),
+      mt(-2, 0, 16),
+      mt(2, 0, 14),
+      mt(-16, 0, 26),
+      mt(-8, 0, 25),
+      mt(0, 0, 26),
+      mt(8, 0, 25),
+      mt(14, 0, 26),
+      mt(12, 0, 4),
+      mt(12, 0, 12),
+      mt(12, 0, 17.2),
+      mt(-5.9, 2.59, -2),
+      mt(-12, 2.59, 20),
+      mt(-18, 2.59, 9),
+      mt(7, 2.59, 9),
+    ];
+  }
   _.forEach(E),
     y.forEach((z) => {
       z.type === "ground" && E(z.pos);
@@ -25991,7 +26308,7 @@ async function C1(i) {
     coverPoints: _,
     skylights: n.skylights,
     shedLights: n.lights,
-    vantage: { stairsFoot: mt(-2.2, 0, 12.4), roof: mt(13.5, 2.59, 12.4) },
+    vantage: wY.vantage,
     stats: {
       labelsAtlased: h.count,
       containers: t.placed.filter((z) => z.name.startsWith("container")).length,
@@ -36388,6 +36705,8 @@ var h_ = {
     ControlLeft: "crouch",
     ControlRight: "crouch",
     KeyR: "reload",
+    Digit1: "wep1",
+    Digit2: "wep2",
     KeyE: "interact",
     KeyF: "melee",
     KeyV: "melee",
@@ -36455,6 +36774,12 @@ function v_(i) {
       },
       onModeChange(P) {
         h.push(P);
+      },
+      nextWeapon() {
+        i.weapon && i.weapon.nextWeapon && i.weapon.nextWeapon();
+      },
+      prevWeapon() {
+        i.weapon && i.weapon.prevWeapon && i.weapon.prevWeapon();
       },
       describeMode() {
         return f.mode === "touch"
@@ -36546,6 +36871,10 @@ function v_(i) {
           (f.look.dy += Y * f_ * f.sensitivity * (f.invertY ? -1 : 1));
       }
     }),
+    addEventListener("wheel", (P) => {
+      if (!(r && (f.locked || f.mode === "drag"))) return;
+      P.deltaY > 0 ? f.nextWeapon() : f.prevWeapon();
+    }, { passive: !0 }),
     document.addEventListener("pointerlockchange", () => {
       if (((f.locked = document.pointerLockElement === e), f.locked))
         (a = !0), (l = 0), (c = 0), f.touch || p("lock");
@@ -39654,6 +39983,62 @@ vObjP = position; vONrm = normal; vWNrm = normalize(mat3(modelMatrix) * normal);
     i
   );
 }
+var WEAPON_DEFS = {
+    pac9: {
+      id: "pac9",
+      name: "PAC-9 冲锋枪",
+      mode: "auto",
+      damage: 26,
+      rpm: 720,
+      magSize: 30,
+      reserve: 150,
+      spreadBase: 0.0125,
+      range: 300,
+      pellets: 1,
+      reloadTactical: 2.1,
+      reloadEmpty: 2.72,
+    },
+    shotgun: {
+      id: "shotgun",
+      name: "玄鲸 M4 霰弹枪",
+      mode: "pump",
+      damage: 13,
+      rpm: 68,
+      magSize: 6,
+      reserve: 36,
+      spreadBase: 0.055,
+      range: 60,
+      pellets: 8,
+      reloadTactical: 2.4,
+      reloadEmpty: 3.1,
+    },
+    rifle: {
+      id: "rifle",
+      name: "玄鲸 DMR 精确步枪",
+      mode: "semi",
+      damage: 95,
+      rpm: 150,
+      magSize: 5,
+      reserve: 30,
+      spreadBase: 0.004,
+      range: 600,
+      pellets: 1,
+      reloadTactical: 2.3,
+      reloadEmpty: 2.9,
+    },
+  },
+  DROP_TABLE = { hound: "shotgun", gull: "rifle" },
+  loadoutState = {
+    owned: ["pac9"],
+    current: 0,
+    pool: {
+      pac9: { mag: 30, reserve: 150 },
+      shotgun: { mag: 6, reserve: 0 },
+      rifle: { mag: 5, reserve: 0 },
+    },
+    droppedFirst: {},
+    pickups: [],
+  };
 var gi = W,
   fm = Lt,
   Gv = 30,
@@ -39679,6 +40064,9 @@ var i0 = (i, e, t, n = "XYZ") => new fm().setFromEuler(new In(i, e, t, n));
 async function dm(i) {
   let e = new wt();
   e.name = "viewmodel-pac9";
+  let ACT = null,
+    vmVisible = !0,
+    VIEWS = { pac9: null, shotgun: null, rifle: null };
   let t = w_(),
     n = { anodized_black: 2, gunmetal: 2, brass: 4, glove_fabric: 3, rubber: 4 },
     s = (Me) => i.mats.get(Me, { triplanar: !0, vertexColors: !0, scale: n[Me] || 1 }),
@@ -39904,6 +40292,735 @@ async function dm(i) {
   }
   q.position.copy(G.p), q.quaternion.copy(G.q);
   let R = C.clone().invert();
+  ACT = {
+    id: "pac9",
+    root: e,
+    flash: x,
+    bolt: h,
+    boltTravel: mi.boltTravel,
+    mag: d,
+    muzzle: mi.muzzle,
+    eject: mi.eject,
+    finger: z,
+    reloadVisual(Pt, Je) {
+      le(Je.empty ? ue : $, Pt),
+        q.position.copy(Y),
+        q.quaternion.copy(L),
+        Pt >= me && Pt < ee
+          ? (Z.copy(L).multiply(R),
+            f.quaternion.copy(Z),
+            f.position.copy(p).sub(j.p).applyQuaternion(Z).add(Y))
+          : (f.quaternion.identity(), f.position.copy(p));
+    },
+    reloadDone() {
+      q.position.copy(G.p), q.quaternion.copy(G.q);
+    },
+    resetVisual() {
+      (d.visible = !0),
+        (f.visible = !0),
+        f.position.copy(p),
+        f.quaternion.identity(),
+        q.position.copy(G.p),
+        q.quaternion.copy(G.q);
+    },
+  };
+  function cloneHand(src, pos) {
+    let g = new wt();
+    for (let child of src.children)
+      if (child.isMesh) {
+        let mm = new Qe(child.geometry.clone(), child.material);
+        (mm.castShadow = !1), (mm.receiveShadow = !0), (mm.frustumCulled = !1);
+        g.add(mm);
+      }
+    return g.position.copy(pos), g;
+  }
+  function matBf(hex, rough, metal, kind, name) {
+    let m = new Qt({ color: new Ve(hex), roughness: rough, metalness: metal, vertexColors: !0 });
+    return (m.name = name), Bf(m, kind), m;
+  }
+  function bindFinger(hand, base, tip) {
+    let idx = hand.children.length ? hand.children[hand.children.length - 1] : null;
+    if (!idx || !idx.isMesh || !idx.geometry || idx.geometry.attributes.position.count !== base.attributes.position.count) return null;
+    let E = base.attributes,
+      w = tip.attributes,
+      S = -1;
+    return (Me) => {
+      if (Math.abs(Me - S) < 0.004) return;
+      S = Me;
+      let we = idx.geometry.attributes.position,
+        be = idx.geometry.attributes.normal,
+        Oe = E.position.array,
+        pt = w.position.array,
+        ut = E.normal.array,
+        nn = w.normal.array;
+      for (let bt = 0; bt < Oe.length; bt++)
+        (we.array[bt] = Oe[bt] + (pt[bt] - Oe[bt]) * Me),
+          (be.array[bt] = ut[bt] + (nn[bt] - ut[bt]) * Me);
+      (we.needsUpdate = !0), (be.needsUpdate = !0);
+    };
+  }
+  function RB(w, h, d, r, x, y, z, mat, color, boost = 0, rot = null) {
+    return o(Rt(w, h, d, r, x, y, -z, color, boost, rot), mat);
+  }
+  function TB(profile, seg, mat, color, boost = 0, x = 0, y = 0) {
+    return o(Cn(profile, seg, color, boost, x, y), mat);
+  }
+  function railTooth(za, y, mat, color, boost) {
+    return o(
+      qo(
+        [
+          [-0.0106, y],
+          [0.0106, y],
+          [0.0106, y + 0.0016],
+          [0.0065, y + 0.005],
+          [-0.0065, y + 0.005],
+          [-0.0106, y + 0.0016],
+        ],
+        -za,
+        -za + 0.0046,
+        5e-4,
+        color,
+        boost,
+      ),
+      mat,
+    );
+  }
+  function buildShotgun() {
+    let root = new wt();
+    root.name = "viewmodel-shotgun";
+    let steel = matBf(0x2c3138, 0.4, 0.84, 1, "shotgun_steel"),
+      darkSteel = matBf(0x1c1f24, 0.5, 0.8, 0, "shotgun_dark"),
+      wood = s("wood_dark"),
+      rubber = s("rubber"),
+      brass = s("brass"),
+      gun = s("gunmetal");
+    let Y0 = 0.03,
+      ST = [1, 1, 1],
+      WD = [1.18, 0.84, 0.52],
+      GU = [0.9, 0.92, 0.98];
+    // barrel (lathe, bore axis Y0)
+    root.add(
+      TB(
+        [
+          [0.014, 0.04],
+          [0.0155, 0.04],
+          [0.0155, 0.3],
+          [0.0145, 0.43],
+          [0.014, 0.44],
+        ],
+        20,
+        gun,
+        GU,
+        0.2,
+        0,
+        Y0,
+      ),
+    );
+    // barrel shank / chamber collar
+    root.add(
+      TB(
+        [
+          [0.011, 0.015],
+          [0.017, 0.015],
+          [0.018, 0.03],
+          [0.018, 0.05],
+          [0.017, 0.07],
+          [0.011, 0.07],
+        ],
+        16,
+        steel,
+        ST,
+        3,
+        0,
+        Y0,
+      ),
+    );
+    // ventilated top rib
+    root.add(o(qo([[-0.004, 0], [0.004, 0], [0.004, 0.0035], [-0.004, 0.0035]], 0.02, 0.4, 3e-4, ST, 0.2).translate(0, Y0 + 0.0135, 0), darkSteel));
+    // magazine tube below barrel
+    root.add(
+      TB(
+        [
+          [0.011, -0.03],
+          [0.0125, -0.03],
+          [0.0125, 0.32],
+          [0.012, 0.34],
+          [0.011, 0.34],
+        ],
+        16,
+        darkSteel,
+        [0.85, 0.88, 0.95],
+        0.15,
+        0,
+        -0.002,
+      ),
+    );
+    // tube end cap (brass)
+    root.add(
+      TB(
+        [
+          [0.011, 0.335],
+          [0.014, 0.335],
+          [0.0145, 0.342],
+          [0.013, 0.35],
+          [0.0125, 0.352],
+          [0.0115, 0.352],
+        ],
+        16,
+        brass,
+        [1.15, 0.95, 0.6],
+        0.1,
+        0,
+        -0.002,
+      ),
+    );
+    // barrel band
+    root.add(
+      TB(
+        [
+          [0.0125, 0.33],
+          [0.0185, 0.33],
+          [0.0195, 0.336],
+          [0.0195, 0.348],
+          [0.0185, 0.354],
+          [0.0125, 0.354],
+        ],
+        16,
+        steel,
+        ST,
+        2,
+        0,
+        0.012,
+      ),
+    );
+    // receiver (side-profile extrusion, chamfered, barrel socket + loading port)
+    root.add(
+      o(
+        xr(
+          [
+            [-0.2, -0.024],
+            [-0.2, 0.016],
+            [0.02, 0.016],
+            [0.04, 0.024],
+            [0.04, 0.03],
+            [0.04, 0.01],
+            [0.04, -0.02],
+            [0.018, -0.034],
+            [-0.02, -0.034],
+            [-0.03, -0.05],
+            [-0.11, -0.05],
+            [-0.2, -0.024],
+          ],
+          -0.018,
+          0.018,
+          0.003,
+          ST,
+          3,
+        ),
+        steel,
+      ),
+    );
+    // ejection port (right side inset)
+    root.add(RB(0.003, 0.016, 0.05, 0.001, 0.0198, 0.003, -0.02, darkSteel, [0.35, 0.35, 0.4], 0));
+    // loading port (bottom inset)
+    root.add(RB(0.02, 0.004, 0.06, 0.0015, 0, -0.0345, -0.04, darkSteel, [0.35, 0.35, 0.4], 0));
+    // top picatinny rail
+    root.add(RB(0.022, 0.004, 0.09, 0.001, 0, 0.0185, 0.025, steel, ST, 2));
+    for (let za = 0.06; za >= -0.015; za -= 0.0096) root.add(railTooth(za, 0.0205, steel, ST, 2));
+    // bead sight (brass)
+    let bead = o(new ls(0.0055, 10, 10), brass);
+    bead.position.set(0, Y0 + 0.0165, -0.428), root.add(bead);
+    // pump forend (wood) + action bars
+    let pump = new wt();
+    pump.add(
+      o(
+        qo(
+          [
+            [-0.024, -0.022],
+            [0.024, -0.022],
+            [0.027, -0.006],
+            [0.024, 0.02],
+            [-0.024, 0.02],
+            [-0.027, -0.006],
+          ],
+          -0.105,
+          0.105,
+          0.004,
+          WD,
+          0.35,
+        ),
+        wood,
+      ),
+    );
+    for (let zz = -0.06; zz <= 0.06; zz += 0.04) pump.add(RB(0.05, 0.003, 0.008, 0.001, 0, 0.0, zz, darkSteel, [0.3, 0.3, 0.34], 0));
+    pump.add(RB(0.006, 0.004, 0.12, 0.001, -0.017, 0.006, 0.1, steel, ST, 2));
+    pump.add(RB(0.006, 0.004, 0.12, 0.001, 0.017, 0.006, 0.1, steel, ST, 2));
+    pump.position.set(0, -0.002, -0.22), root.add(pump);
+    // wood stock (curved comb + integrated pistol grip)
+    root.add(
+      o(
+        xr(
+          [
+            [-0.19, -0.028],
+            [-0.19, 0.012],
+            [-0.205, 0.013],
+            [-0.26, 0.02],
+            [-0.35, 0.016],
+            [-0.405, 0.008],
+            [-0.408, -0.01],
+            [-0.405, -0.02],
+            [-0.32, -0.028],
+            [-0.245, -0.072],
+            [-0.212, -0.085],
+            [-0.202, -0.068],
+            [-0.196, -0.044],
+            [-0.19, -0.028],
+          ],
+          -0.02,
+          0.02,
+          0.004,
+          WD,
+          0.35,
+        ),
+        wood,
+      ),
+    );
+    // rubber butt pad
+    root.add(
+      o(
+        xr(
+          [
+            [-0.405, 0.008],
+            [-0.408, -0.01],
+            [-0.405, -0.02],
+            [-0.402, 0.008],
+          ],
+          -0.0205,
+          0.0205,
+          0.001,
+          [0.85, 0.85, 0.9],
+          0.1,
+        ),
+        rubber,
+      ),
+    );
+    // trigger guard (wire loop)
+    root.add(
+      o(
+        sm(
+          Fn(
+            [
+              [-0.03, -0.046, 0.12],
+              [-0.012, -0.06, 0.12],
+              [0.006, -0.062, 0.12],
+              [0.022, -0.052, 0.12],
+              [0.03, -0.038, 0.12],
+            ],
+            0.0026,
+            10,
+            true,
+          ),
+          ST,
+          0,
+        ),
+        steel,
+      ),
+    );
+    // trigger
+    root.add(RB(0.006, 0.015, 0.004, 0.001, 0, -0.048, 0.12, steel, ST, 0, [0.2, 0, 0]));
+    // receiver pins
+    root.add(RB(0.004, 0.004, 0.004, 0.001, -0.02, 0.006, -0.02, steel, ST, 0));
+    root.add(RB(0.004, 0.004, 0.004, 0.001, 0.02, 0.006, -0.02, steel, ST, 0));
+    // muzzle flash
+    let flash = N_();
+    (flash.position.fromArray([0, Y0, -0.45]), (flash.visible = !1), root.add(flash));
+    // hands (trigger hand on grip, support hand on pump)
+    let gp = new gi(0, -0.075, 0.22),
+      lh = cloneHand(A, gp.clone().sub(new gi(0.006, -0.031, -0.085).applyQuaternion(b)));
+    lh.quaternion.copy(b), root.add(lh);
+    let pac9Forend = new gi(-0.015, -0.062, -0.236),
+      fp = new gi(0, -0.06, -0.22),
+      rh = cloneHand(q, G.p.clone().add(fp).sub(pac9Forend));
+    rh.quaternion.copy(G.q), root.add(rh);
+    let rhRest = rh.position.clone(),
+      rhQ = rh.quaternion.clone(),
+      shellPort = new gi(0.02, -0.07, 0),
+      shellKeys = [
+        [0, { p: rhRest.clone(), q: rhQ.clone() }],
+        [0.3, { p: rhRest.clone(), q: rhQ.clone() }],
+        [0.55, { p: shellPort.clone(), q: rhQ.clone() }],
+        [0.8, { p: shellPort.clone().add(new gi(0, -0.012, 0.012)), q: rhQ.clone() }],
+        [1.05, { p: shellPort.clone(), q: rhQ.clone() }],
+        [1.3, { p: shellPort.clone().add(new gi(0, -0.012, 0.012)), q: rhQ.clone() }],
+        [1.45, { p: shellPort.clone(), q: rhQ.clone() }],
+        [1.75, { p: rhRest.clone(), q: rhQ.clone() }],
+        [9, { p: rhRest.clone(), q: rhQ.clone() }],
+      ];
+    let finger = bindFinger(lh, m.index[0], m.index[1]);
+    root.traverse((x) => x.layers.set(zc));
+    return {
+      id: "shotgun",
+      root,
+      flash,
+      bolt: null,
+      boltTravel: 0,
+      mag: null,
+      muzzle: [0, Y0, -0.45],
+      eject: [0.022, 0.008, -0.05],
+      finger,
+      reloadVisual(Pt, Je) {
+        let pz = -0.22;
+        if (Pt >= 1.75 && Pt < 2) pz = -0.22 + Yo((Pt - 1.75) / 0.25) * 0.09;
+        else if (Pt >= 2 && Pt < 2.2) pz = -0.13 - Yo((Pt - 2) / 0.2) * 0.09;
+        pump.position.z = pz;
+        le(shellKeys, Pt);
+        rh.position.copy(Y);
+        rh.quaternion.copy(L);
+        Pt >= 1.75 && (rh.position.z += pz + 0.22);
+      },
+      reloadDone() {
+        pump.position.z = -0.22;
+        rh.position.copy(rhRest);
+        rh.quaternion.copy(rhQ);
+      },
+      resetVisual() {
+        pump.position.z = -0.22;
+        rh.position.copy(rhRest);
+        rh.quaternion.copy(rhQ);
+      },
+    };
+  }
+  function buildRifle() {
+    let root = new wt();
+    root.name = "viewmodel-rifle";
+    let steel = matBf(0x2a2e35, 0.4, 0.85, 1, "rifle_steel"),
+      dark = matBf(0x17191d, 0.62, 0.55, 0, "rifle_dark"),
+      poly = matBf(0x23262c, 0.6, 0.15, 2, "rifle_poly"),
+      gun = s("gunmetal"),
+      rubber = s("rubber");
+    let glass = new Qt({
+      color: new Ve(0x0a1418),
+      roughness: 0.12,
+      metalness: 0.1,
+      emissive: new Ve(0x061018),
+      emissiveIntensity: 0.5,
+    });
+    glass.name = "rifle_glass";
+    let Y0 = 0.03,
+      ST = [1, 1, 1],
+      CG = [0.9, 0.92, 0.98];
+    // long barrel (lathe)
+    root.add(
+      TB(
+        [
+          [0.011, 0.06],
+          [0.012, 0.06],
+          [0.012, 0.52],
+          [0.0115, 0.56],
+          [0.011, 0.56],
+        ],
+        24,
+        gun,
+        CG,
+        0.15,
+        0,
+        Y0,
+      ),
+    );
+    // muzzle brake
+    root.add(
+      TB(
+        [
+          [0.011, 0.53],
+          [0.017, 0.53],
+          [0.0175, 0.545],
+          [0.0175, 0.555],
+          [0.016, 0.562],
+          [0.011, 0.562],
+        ],
+        20,
+        steel,
+        ST,
+        2,
+        0,
+        Y0,
+      ),
+    );
+    // gas block
+    root.add(RB(0.024, 0.02, 0.03, 0.002, 0, Y0, -0.11, steel, ST, 2));
+    // handguard (octagonal extrusion) + M-LOK slots
+    root.add(
+      o(
+        qo(
+          [
+            [-0.024, -0.018],
+            [0.024, -0.018],
+            [0.027, -0.004],
+            [0.024, 0.014],
+            [-0.024, 0.014],
+            [-0.027, -0.004],
+          ],
+          0.08,
+          0.35,
+          0.003,
+          [0.55, 0.55, 0.58],
+          0.2,
+        ),
+        dark,
+      ),
+    );
+    for (let zz = -0.3; zz <= -0.13; zz += 0.06)
+      root.add(RB(0.004, 0.011, 0.04, 0.001, 0.0275, 0.0, zz, dark, [0.2, 0.2, 0.22], 0)),
+        root.add(RB(0.004, 0.011, 0.04, 0.001, -0.0275, 0.0, zz, dark, [0.2, 0.2, 0.22], 0));
+    // receiver (side-profile extrusion with barrel socket bump)
+    root.add(
+      o(
+        xr(
+          [
+            [-0.13, -0.026],
+            [-0.13, 0.012],
+            [0.02, 0.012],
+            [0.05, 0.02],
+            [0.05, 0.028],
+            [0.05, 0.012],
+            [0.05, -0.024],
+            [0.02, -0.034],
+            [-0.02, -0.034],
+            [-0.03, -0.05],
+            [-0.11, -0.05],
+            [-0.13, -0.026],
+          ],
+          -0.02,
+          0.02,
+          0.003,
+          [0.8, 0.8, 0.85],
+          2,
+        ),
+        poly,
+      ),
+    );
+    // ejection port
+    root.add(RB(0.003, 0.014, 0.05, 0.001, 0.0208, 0.002, -0.01, dark, [0.2, 0.2, 0.22], 0));
+    // top picatinny rail
+    root.add(RB(0.022, 0.004, 0.15, 0.001, 0, 0.0185, 0.055, steel, ST, 2));
+    for (let za = 0.12; za >= -0.015; za -= 0.0096) root.add(railTooth(za, 0.0205, steel, ST, 2));
+    // scope (lathe body + lenses + rings + turrets)
+    root.add(
+      o(
+        Cn(
+          [
+            [0.016, -0.115],
+            [0.02, -0.115],
+            [0.02, -0.085],
+            [0.016, -0.08],
+            [0.016, 0.08],
+            [0.024, 0.08],
+            [0.024, 0.115],
+            [0.016, 0.115],
+          ],
+          24,
+          ST,
+          2,
+          0,
+          0.075,
+        ),
+        steel,
+      ),
+    );
+    let objLens = o(new Ys(0.023, 0.023, 0.004, 20), glass);
+    (objLens.rotation.x = Math.PI / 2), objLens.position.set(0, 0.075, -0.116), root.add(objLens);
+    let ocuLens = o(new Ys(0.019, 0.019, 0.004, 20), glass);
+    (ocuLens.rotation.x = Math.PI / 2), ocuLens.position.set(0, 0.075, 0.116), root.add(ocuLens);
+    for (let [za, rz] of [[0.05, -0.05], [-0.01, 0.01]])
+      root.add(o(Cn([[0.0165, -rz - 0.006], [0.03, -rz - 0.006], [0.03, -rz + 0.006], [0.0165, -rz + 0.006]], 20, ST, 2, 0, 0.05), steel));
+    root.add(RB(0.012, 0.016, 0.012, 0.004, 0, 0.097, 0.0, steel, ST, 2));
+    root.add(RB(0.016, 0.012, 0.012, 0.004, 0.026, 0.075, -0.02, steel, ST, 2));
+    // polymer stock (integrated pistol grip + cheek riser)
+    root.add(
+      o(
+        xr(
+          [
+            [-0.52, -0.02],
+            [-0.52, 0.01],
+            [-0.44, 0.035],
+            [-0.34, 0.03],
+            [-0.26, 0.012],
+            [-0.13, 0.012],
+            [-0.13, -0.03],
+            [-0.18, -0.075],
+            [-0.215, -0.085],
+            [-0.24, -0.05],
+            [-0.28, -0.028],
+            [-0.36, -0.024],
+            [-0.52, -0.02],
+          ],
+          -0.021,
+          0.021,
+          0.004,
+          [0.55, 0.55, 0.58],
+          0.2,
+        ),
+        poly,
+      ),
+    );
+    // rubber butt pad + cheek riser
+    root.add(
+      o(
+        xr(
+          [
+            [-0.52, 0.01],
+            [-0.52, -0.02],
+            [-0.535, -0.02],
+            [-0.535, 0.01],
+          ],
+          -0.022,
+          0.022,
+          0.001,
+          [0.85, 0.85, 0.9],
+          0.1,
+        ),
+        rubber,
+      ),
+    );
+    root.add(RB(0.02, 0.02, 0.07, 0.006, 0, 0.045, 0.41, rubber, [0.7, 0.7, 0.75], 0));
+    // magazine (body + floor plate)
+    let mag = new wt();
+    mag.add(RB(0.03, 0.09, 0.05, 0.004, 0, -0.02, 0.01, poly, [0.5, 0.5, 0.54], 0));
+    mag.add(RB(0.032, 0.008, 0.054, 0.002, 0, -0.065, 0.01, dark, [0.3, 0.3, 0.34], 0));
+    root.add(mag);
+    // bolt (group, geometry baked at rest; position.z overwritten per-frame)
+    let bolt = new wt();
+    bolt.add(RB(0.028, 0.01, 0.01, 0.003, 0.032, 0.014, 0.0, steel, ST, 2));
+    let boltKnob = o(new ls(0.006, 10, 10), steel);
+    boltKnob.position.set(0.048, 0.014, 0.0), bolt.add(boltKnob);
+    root.add(bolt);
+    // trigger guard + trigger
+    root.add(
+      o(
+        sm(
+          Fn(
+            [
+              [-0.02, -0.05, 0.06],
+              [0.0, -0.062, 0.06],
+              [0.02, -0.055, 0.06],
+              [0.03, -0.04, 0.06],
+            ],
+            0.0026,
+            10,
+            true,
+          ),
+          ST,
+          0,
+        ),
+        steel,
+      ),
+    );
+    root.add(RB(0.006, 0.015, 0.004, 0.001, 0, -0.045, 0.06, steel, ST, 0, [0.2, 0, 0]));
+    // muzzle flash
+    let flash = N_();
+    (flash.position.fromArray([0, Y0, -0.6]), (flash.visible = !1), root.add(flash));
+    // hands (trigger hand on grip, support hand on handguard)
+    let gp = new gi(0, -0.075, 0.2),
+      lh = cloneHand(A, gp.clone().sub(new gi(0.006, -0.031, -0.085).applyQuaternion(b)));
+    lh.quaternion.copy(b), root.add(lh);
+    let pac9Forend = new gi(-0.015, -0.062, -0.236),
+      fp = new gi(0, -0.03, -0.22),
+      rh = cloneHand(q, G.p.clone().add(fp).sub(pac9Forend));
+    rh.quaternion.copy(G.q), root.add(rh);
+    let rhRest = rh.position.clone(),
+      rhQ = rh.quaternion.clone(),
+      magRest = new gi(0, 0, 0),
+      magGrip = new gi(0, -0.05, 0),
+      H_REST = { p: rhRest.clone(), q: rhQ.clone() },
+      H_NEAR = { p: rhRest.clone().add(new gi(0, -0.05, 0.03)), q: rhQ.clone() },
+      H_MAG = { p: magGrip.clone(), q: C.clone() },
+      H_OUT = { p: new gi(0, -0.26, 0.08), q: C.clone().multiply(i0(-0.35, 0, 0.2)) },
+      H_TAP = { p: new gi(0, -0.06, 0), q: C.clone() },
+      H_RACK = { p: new gi(0.05, 0.02, 0), q: X.clone() },
+      H_RACKB = { p: new gi(0.05, 0.02, 0.055), q: X.clone() },
+      rifleTact = [
+        [0, H_REST],
+        [0.1, H_REST],
+        [0.36, H_NEAR],
+        [0.44, H_MAG],
+        [0.5, H_MAG],
+        [0.8, H_OUT],
+        [0.98, H_OUT],
+        [1.28, H_MAG],
+        [1.35, H_MAG],
+        [1.45, H_TAP],
+        [1.52, H_TAP],
+        [1.62, H_MAG],
+        [1.7, H_NEAR],
+        [2.02, H_REST],
+        [9, H_REST],
+      ],
+      rifleEmpty = [
+        ...rifleTact.slice(0, 12),
+        [1.7, H_NEAR],
+        [1.96, H_RACK],
+        [2.02, H_RACK],
+        [2.14, H_RACKB],
+        [2.19, H_RACKB],
+        [2.26, H_RACK],
+        [2.36, H_RACK],
+        [2.66, H_REST],
+        [9, H_REST],
+      ],
+      Rin = C.clone().invert();
+    let finger = bindFinger(lh, m.index[0], m.index[1]);
+    root.traverse((x) => x.layers.set(zc));
+    return {
+      id: "rifle",
+      root,
+      flash,
+      bolt,
+      boltTravel: 0.055,
+      mag,
+      muzzle: [0, Y0, -0.6],
+      eject: [0.022, 0.012, -0.05],
+      finger,
+      reloadVisual(Pt, Je) {
+        le(Je.empty ? rifleEmpty : rifleTact, Pt);
+        rh.position.copy(Y);
+        rh.quaternion.copy(L);
+        Pt >= me && Pt < ee
+          ? (Z.copy(L).multiply(Rin),
+            mag.quaternion.copy(Z),
+            mag.position.copy(magRest).sub(magGrip).applyQuaternion(Z).add(Y))
+          : (mag.quaternion.identity(), mag.position.copy(magRest));
+      },
+      reloadDone() {
+        mag.quaternion.identity();
+        mag.position.copy(magRest);
+        rh.position.copy(rhRest);
+        rh.quaternion.copy(rhQ);
+      },
+      resetVisual() {
+        (mag.visible = !0),
+          mag.quaternion.identity(),
+          mag.position.copy(magRest),
+          (bolt.position.z = 0),
+          rh.position.copy(rhRest),
+          rh.quaternion.copy(rhQ);
+      },
+    };
+  }
+  function setActiveView(id) {
+    let view = VIEWS[id];
+    if (!view || view === ACT) return;
+    let prev = ACT,
+      host = prev && prev.root.parent ? prev.root.parent : i.camera;
+    prev && prev.root.parent && prev.root.parent.remove(prev.root);
+    ACT = view;
+    ve.root = ACT.root;
+    ACT.root.visible = vmVisible;
+    host.add(ACT.root);
+  }
+  VIEWS.pac9 = ACT;
+  VIEWS.shotgun = buildShotgun();
+  VIEWS.rifle = buildRifle();
+  window.__weaponView = (Me) => VIEWS[Me] && setActiveView(Me);
   e.traverse((Me) => {
     Me.layers.set(zc);
   }),
@@ -39930,6 +41047,7 @@ async function dm(i) {
       dryDone: !1,
       autoReload: -1,
       reload: null,
+      equip: null,
       burst: 0,
       lastShot: -9,
       bloom: 0,
@@ -39975,13 +41093,16 @@ async function dm(i) {
       spread: 0.0125,
       damage: H_,
       rpm: O_,
-      root: e,
+      mode: "auto",
+      pellets: 1,
+      spreadBase: 0.0125,
+      root: ACT.root,
       debug: ce,
       info: { tris: Math.round(I), meshes: se },
       update: Xe,
-      reset: _e,
+      reset: resetLoadout,
       setVisible(Me) {
-        e.visible = !!Me;
+        (vmVisible = !!Me), (ACT.root.visible = vmVisible);
       },
       muzzleWorld: Re,
       reloadNow: Fe,
@@ -39997,6 +41118,16 @@ async function dm(i) {
           (k[Me].x = 0), (k[Me].v = 0);
         k.sprintT = i.player.sprinting ? 1 : 0;
       },
+      nextWeapon() {
+        cycleWeapon(1);
+      },
+      prevWeapon() {
+        cycleWeapon(-1);
+      },
+      equip(slot) {
+        return equipWeapon(slot);
+      },
+      currentId,
     };
   function _e() {
     (ve.ammo = Gv),
@@ -40009,6 +41140,7 @@ async function dm(i) {
         dryDone: !1,
         autoReload: -1,
         reload: null,
+        equip: null,
         burst: 0,
         lastShot: -9,
         bloom: 0,
@@ -40026,25 +41158,171 @@ async function dm(i) {
       });
     for (let Me of ["kZ", "kP", "kY", "kR", "swY", "swP", "jY", "jP", "bump"])
       (k[Me].x = 0), (k[Me].v = 0);
-    (d.visible = !0),
-      (f.visible = !0),
-      f.position.copy(p),
-      f.quaternion.identity(),
-      q.position.copy(G.p),
-      q.quaternion.copy(G.q);
+    (ce.noFire = !1), ACT.resetVisual();
   }
+  function applyStats(id) {
+    let def = WEAPON_DEFS[id];
+    if (!def) return;
+    (Gv = def.magSize),
+      (B_ = def.reserve),
+      (O_ = def.rpm),
+      (H_ = def.damage),
+      (V_ = def.range),
+      (W_ = def.reloadTactical),
+      (G_ = def.reloadEmpty);
+  }
+  function saveCurrent() {
+    let id = loadoutState.owned[loadoutState.current];
+    if (!id) return;
+    loadoutState.pool[id] = { mag: ve.ammo, reserve: ve.reserve };
+  }
+  function resetLoadout() {
+    loadoutState.owned = ["pac9"];
+    loadoutState.current = 0;
+    loadoutState.pool = {
+      pac9: { mag: WEAPON_DEFS.pac9.magSize, reserve: WEAPON_DEFS.pac9.reserve },
+      shotgun: { mag: WEAPON_DEFS.shotgun.magSize, reserve: 0 },
+      rifle: { mag: WEAPON_DEFS.rifle.magSize, reserve: 0 },
+    };
+    loadoutState.droppedFirst = {};
+    for (let pk of loadoutState.pickups) pk.mesh && i.scene.remove(pk.mesh);
+    loadoutState.pickups.length = 0;
+    applyStats("pac9");
+    setActiveView("pac9");
+    _e();
+    (ve.name = WEAPON_DEFS.pac9.name),
+      (ve.mode = "auto"),
+      (ve.pellets = 1),
+      (ve.spreadBase = WEAPON_DEFS.pac9.spreadBase),
+      (ve.magSize = Gv),
+      (ve.damage = H_),
+      (ve.rpm = O_),
+      (ve.spread = WEAPON_DEFS.pac9.spreadBase);
+  }
+  function equipWeapon(slot) {
+    let id = loadoutState.owned[slot],
+      from = loadoutState.owned[loadoutState.current];
+    if (!id || slot === loadoutState.current || !from || k.equip) return !1;
+    saveCurrent();
+    loadoutState.current = slot;
+    applyStats(id);
+    _e();
+    let pool = loadoutState.pool[id] || { mag: WEAPON_DEFS[id].magSize, reserve: 0 };
+    (ve.ammo = pool.mag),
+      (ve.reserve = pool.reserve),
+      (ve.name = WEAPON_DEFS[id].name),
+      (ve.magSize = Gv),
+      (ve.damage = H_),
+      (ve.rpm = O_),
+      (ve.mode = WEAPON_DEFS[id].mode),
+      (ve.pellets = WEAPON_DEFS[id].pellets),
+      (ve.spreadBase = WEAPON_DEFS[id].spreadBase);
+    i.events.emit("weapon:switch", { from: from, to: id });
+    (k.equip = { target: id, t: 0, phase: "holster" }), (ce.noFire = !0);
+    return !0;
+  }
+  function cycleWeapon(dir) {
+    if (loadoutState.owned.length < 2) return;
+    equipWeapon((loadoutState.current + dir + loadoutState.owned.length) % loadoutState.owned.length);
+  }
+  function currentId() {
+    return loadoutState.owned[loadoutState.current] || "pac9";
+  }
+  function grantAmmo(weaponId, amount) {
+    let def = WEAPON_DEFS[weaponId];
+    if (!def) return;
+    let pool = loadoutState.pool[weaponId];
+    if (!pool) pool = loadoutState.pool[weaponId] = { mag: def.magSize, reserve: 0 };
+    let cap = def.magSize * 3;
+    pool.reserve = Math.min(cap, pool.reserve + amount);
+    if (loadoutState.owned[loadoutState.current] === weaponId) ve.reserve = pool.reserve;
+  }
+  function pickupWeapon(weaponId, ammo, kind) {
+    let def = WEAPON_DEFS[weaponId];
+    if (!def) return;
+    let ownedIdx = loadoutState.owned.indexOf(weaponId);
+    if (ownedIdx >= 0) {
+      grantAmmo(weaponId, ammo);
+      i.events.emit("weapon:pickup", { kind: kind === "ammo" ? "ammo" : weaponId, weapon: weaponId });
+      return;
+    }
+    if (loadoutState.owned.length < 2) {
+      loadoutState.owned.push(weaponId);
+      loadoutState.pool[weaponId] = { mag: def.magSize, reserve: ammo };
+      equipWeapon(loadoutState.owned.length - 1);
+    } else {
+      loadoutState.owned[1] = weaponId;
+      loadoutState.pool[weaponId] = { mag: def.magSize, reserve: ammo };
+      equipWeapon(1);
+    }
+    i.events.emit("weapon:pickup", { kind: weaponId, weapon: weaponId });
+  }
+  function spawnPickup(weaponId, ammo, pos, kind) {
+    let mesh = null;
+    try {
+      let color = kind === "ammo" ? 0xffee66 : weaponId === "shotgun" ? 0xffaa33 : 0x55ccff,
+        geo = kind === "ammo" ? new un(0.34, 0.2, 0.34) : new Na(0.36, 0),
+        mat = i.mats && i.mats.emissive ? i.mats.emissive(color, 2.6) : new Nn({ color: new Ve(color) });
+      mesh = new Qe(geo, mat);
+      mesh.position.set(pos.x, pos.y + 0.85, pos.z);
+      (mesh.castShadow = !1), (mesh.receiveShadow = !1), (mesh.frustumCulled = !1);
+      mesh.userData.weaponPickup = weaponId;
+      i.scene.add(mesh);
+    } catch (err) {
+      console.warn("[weapon] spawnPickup failed: " + (err && err.message));
+    }
+    loadoutState.pickups.push({ mesh, weaponId, kind, ammo, pos: { x: pos.x, y: pos.y, z: pos.z }, t: 0 });
+  }
+  function rollDrop(type, pos) {
+    let weaponId = DROP_TABLE[type];
+    if (!weaponId || !pos) return;
+    let first = !loadoutState.droppedFirst[type];
+    loadoutState.droppedFirst[type] = !0;
+    if (!first && i.rng() > 0.4) return;
+    let def = WEAPON_DEFS[weaponId],
+      owned = loadoutState.owned.indexOf(weaponId) >= 0;
+    if (owned) {
+      spawnPickup(weaponId, def.magSize * 2, pos, "ammo");
+      i.events.emit("weapon:drop", { kind: type, pos: pos, weapon: weaponId, ammo: !0 });
+    } else {
+      let ammo = weaponId === "shotgun" ? 12 : weaponId === "rifle" ? 20 : def.magSize;
+      spawnPickup(weaponId, ammo, pos, "weapon");
+      i.events.emit("weapon:drop", { kind: type, pos: pos, weapon: weaponId });
+    }
+  }
+  function updatePickups(dt) {
+    let p = i.player;
+    if (!p || !p.alive) return;
+    for (let j = loadoutState.pickups.length - 1; j >= 0; j--) {
+      let pk = loadoutState.pickups[j];
+      if (pk.mesh) {
+        pk.t += dt;
+        pk.mesh.rotation.y += dt * 2.4;
+        pk.mesh.position.y = pk.pos.y + 0.85 + Math.sin(pk.t * 2.2) * 0.12;
+      }
+      if (Math.hypot(pk.pos.x - p.pos.x, pk.pos.z - p.pos.z) < 2 && Math.abs(pk.pos.y - p.pos.y) < 3) {
+        pickupWeapon(pk.weaponId, pk.ammo, pk.kind);
+        pk.mesh && i.scene.remove(pk.mesh);
+        loadoutState.pickups.splice(j, 1);
+      }
+    }
+  }
+  i.events.on("enemy:killed", (k) => {
+    if (!k) return;
+    rollDrop(k.type || (k.enemy && k.enemy.type), k.pos || (k.enemy && k.enemy.pos));
+  });
   let Te = new Ye();
   function Pe(Me, we) {
-    e.updateMatrix(), we.fromArray(Me).applyMatrix4(e.matrix);
+    ACT.root.updateMatrix(), we.fromArray(Me).applyMatrix4(ACT.root.matrix);
     let be = i.camera,
       Oe = Math.tan((be.fov * Math.PI) / 360) / Math.tan((i.viewCamera.fov * Math.PI) / 360);
     return (we.x *= Oe), (we.y *= Oe), we.applyQuaternion(be.quaternion).add(be.position);
   }
   function Re(Me = new gi()) {
-    return Pe(mi.muzzle, Me);
+    return Pe(ACT.muzzle, Me);
   }
   function Fe() {
-    if (k.reload || ve.ammo >= ve.magSize || ve.reserve <= 0) return !1;
+    if (k.reload || k.equip || ve.ammo >= ve.magSize || ve.reserve <= 0) return !1;
     let Me = ve.ammo <= 0;
     return (
       (k.reload = { t: 0, T: Me ? G_ : W_, empty: Me, f: {} }),
@@ -40072,15 +41350,28 @@ async function dm(i) {
       .applyQuaternion(we.quaternion),
       Ie.copy(Me.eye || we.position);
     let ut = null;
-    try {
-      ut = i.combat.playerShot(Ie, ze, { damage: H_, range: V_ });
-    } catch {}
+    if ((ve.pellets || 1) <= 1) {
+      try {
+        ut = i.combat.playerShot(Ie, ze, { damage: H_, range: V_ });
+      } catch {}
+    } else
+      for (let pe = 0; pe < ve.pellets; pe++) {
+        let be2 = ae() * Math.PI * 2,
+          pt2 = Math.tan(ve.spread) * Math.sqrt(ae());
+        dt
+          .set(Math.cos(be2) * pt2, Math.sin(be2) * pt2, -1)
+          .normalize()
+          .applyQuaternion(we.quaternion);
+        try {
+          ut = i.combat.playerShot(Ie, dt, { damage: H_, range: V_ }) || ut;
+        } catch {}
+      }
     ut && ut.point ? Ne.copy(ut.point) : Ne.copy(Ie).addScaledVector(ze, V_), Re(We);
     let nn = i.fx;
     nn &&
       (nn.tracer && nn.tracer(We, Ne),
       nn.shell &&
-        (Pe(mi.eject, dt),
+        (Pe(ACT.eject, dt),
         xe.set(2 + ae() * 1.2, 1.2 + ae() * 0.8, 0.5 - ae() * 0.6).applyQuaternion(we.quaternion),
         Me.vel && xe.add(Me.vel),
         nn.shell(dt, xe))),
@@ -40101,27 +41392,45 @@ async function dm(i) {
       (k.kR.v += (ae() - 0.5) * 1.8 * bt),
       (k.bloom = Math.min(1, k.bloom + 0.17)),
       (k.flashT = k.flashDur = 0.036 + ae() * 0.02);
-    let ho = x.material.uniforms;
+    let ho = ACT.flash.material.uniforms;
     (ho.uSeed.value = ae() * 100),
       (ho.uJet.value = 0.6 + ae() * 0.6),
-      (x.rotation.z = (ae() - 0.5) * 0.4);
+      (ACT.flash.rotation.z = (ae() - 0.5) * 0.4);
     let Rs = (0.8 + ae() * 0.5) * bi(1, 0.62, k.adsE);
-    x.scale.set(Rs, Rs, Rs * (0.8 + ae() * 0.5)),
+    ACT.flash.scale.set(Rs, Rs, Rs * (0.8 + ae() * 0.5)),
       (k.boltT = 0),
-      ve.ammo <= 0 && ((k.boltLocked = !0), (d.visible = !1));
+      ve.ammo <= 0 && ((k.boltLocked = !0), ACT.mag && (ACT.mag.visible = !1));
   }
   function Xe(Me) {
     let we = i.player,
       be = i.input;
     if (!we || !be || !we.alive) {
-      (k.prevFire = !1), x && (x.visible = !1);
+      (k.prevFire = !1), ACT.flash && (ACT.flash.visible = !1);
+      (k.equip = null), (ce.noFire = !1);
       return;
     }
     k.t += Me;
-    let Oe = !!be.fire && e.visible && !ce.noFire,
+    updatePickups(Me);
+    let eqO = 0;
+    if (k.equip) {
+      let Eq = k.equip;
+      (Eq.t += Me);
+      if (Eq.phase === "holster") {
+        eqO = Yo(Math.min(1, Eq.t / 0.22));
+        if (Eq.t >= 0.22) (setActiveView(Eq.target), (Eq.phase = "draw"), (Eq.t = 0), (k.bump.v -= 0.6));
+      } else {
+        eqO = 1 - Yo(Math.min(1, Eq.t / 0.35));
+        if (Eq.t >= 0.35) (k.equip = null), (ce.noFire = !1);
+      }
+    }
+    if (be.pressed) {
+      if (be.pressed("wep1")) equipWeapon(0);
+      else if (be.pressed("wep2")) equipWeapon(1);
+    }
+    let Oe = !!be.fire && ACT.root.visible && !ce.noFire && !k.equip,
       pt = Oe && !k.prevFire;
     (k.prevFire = Oe), Oe || (k.dryDone = !1);
-    let ut = !!we.sprinting && !Oe && !be.ads && !k.reload;
+    let ut = !!we.sprinting && !Oe && !be.ads && !k.reload && !k.equip;
     (k.sprintT = kn(k.sprintT, ut ? 1 : 0, 9, Me)),
       be.pressed && be.pressed("reload") && Fe(),
       k.autoReload >= 0 && ((k.autoReload -= Me), k.autoReload < 0 && Fe());
@@ -40141,7 +41450,7 @@ async function dm(i) {
             : !1;
       if (
         (Vt("magout", me) && (k.bump.v -= 0.25),
-        Pt > 0.86 && !Je.f.fresh && ((Je.f.fresh = 1), (d.visible = !0)),
+        Pt > 0.86 && !Je.f.fresh && ((Je.f.fresh = 1), ACT.mag && (ACT.mag.visible = !0)),
         Vt("magin", ee))
       ) {
         k.bump.v += 0.55;
@@ -40154,14 +41463,7 @@ async function dm(i) {
             (nn =
               Pt < P ? Yo((Pt - B) / (P - B)) : Pt < V ? 1 : Math.max(0, 1 - (Pt - V) / 0.035)),
           Vt("bolt", V) && ((k.boltLocked = !1), (k.bump.v += 0.3), (k.kZ.v -= 0.5))),
-        le(Je.empty ? ue : $, Pt),
-        q.position.copy(Y),
-        q.quaternion.copy(L),
-        Pt >= me && Pt < ee
-          ? (Z.copy(L).multiply(R),
-            f.quaternion.copy(Z),
-            f.position.copy(p).sub(j.p).applyQuaternion(Z).add(Y))
-          : (f.quaternion.identity(), f.position.copy(p));
+        ACT.reloadVisual(Pt, Je);
       let ss = Yo(Pt / 0.3),
         Hs = 1 - Yo((Pt - (Je.T - 0.46)) / 0.4);
       (k.reloadW = Math.min(ss, Hs)),
@@ -40172,17 +41474,20 @@ async function dm(i) {
           (k.reloadW = 0),
           (k.rackW = 0),
           i.events.emit("weapon:reload", { phase: "done" }),
-          q.position.copy(G.p),
-          q.quaternion.copy(G.q));
+          ACT.reloadDone());
     }
     k.cooldown -= Me;
-    let bt = !k.reload && k.sprintT < 0.45;
+    let bt = !k.reload && k.sprintT < 0.45,
+      semi = ve.mode === "semi" || ve.mode === "pump",
+      trigger = semi ? pt : Oe,
+      burstCap = semi ? 1 : 3;
     if (Oe && bt)
-      if (ve.ammo > 0) {
+      if (trigger && ve.ammo > 0) {
         let Je = 0;
-        for (; k.cooldown <= 0 && ve.ammo > 0 && Je < 3; ) Be(), (k.cooldown += 60 / O_), Je++;
+        for (; k.cooldown <= 0 && ve.ammo > 0 && Je < burstCap; ) Be(), (k.cooldown += 60 / O_), Je++;
       } else
-        k.dryDone ||
+        trigger &&
+          !k.dryDone &&
           ((k.dryDone = !0),
           i.events.emit("weapon:dry", {}),
           (k.bump.v -= 0.08),
@@ -40210,14 +41515,14 @@ async function dm(i) {
             alpha: 0.22,
           }))),
       (k.heat = Math.max(0, k.heat - Me * 0.2));
-    let Os = !!be.ads && !k.reload && k.sprintT < 0.35;
+    let Os = !!be.ads && !k.reload && k.sprintT < 0.35 && !k.equip;
     (k.adsLin = Zn(k.adsLin + (Os ? Me : -Me) / 0.18, 0, 1)),
       (k.adsE = Yo(k.adsLin)),
       (ve.ads = k.adsE);
     let pn = we.speed || 0,
       Ti = Fo(pn / 6),
       ho =
-        bi(0.0125, 0.0012, k.adsE) +
+        bi(ve.spreadBase || 0.0125, (ve.spreadBase || 0.0125) * 0.096, k.adsE) +
         Ti * bi(0.013, 0.004, k.adsE) +
         k.bloom * bi(0.0065, 0.0022, k.adsE) +
         (we.onGround === !1 ? 0.022 : 0) -
@@ -40256,16 +41561,16 @@ async function dm(i) {
     let ya = 0.072,
       ba = k.boltT < ya ? Math.sin((Math.PI * k.boltT) / ya) : 0;
     k.boltLocked && k.boltT > ya * 0.5 && (ba = Math.max(ba, 0.86)),
-      (h.position.z = mi.boltTravel * Math.max(ba * 0.95, nn)),
+      ACT.bolt && (ACT.bolt.position.z = ACT.boltTravel * Math.max(ba * 0.95, nn)),
       (k.finger = kn(k.finger, (Oe && bt) || ce.flash ? 1 : 0, 30, Me)),
-      z(k.finger);
-    let Hn = x.material.uniforms;
+      ACT.finger && ACT.finger(k.finger);
+    let Hn = ACT.flash.material.uniforms;
     if (
       (ce.flash && ((k.flashT = k.flashDur = 0.05), (Hn.uSeed.value = 3.7)),
       (k.flashT -= Me),
       (Hn.uInt.value = k.flashT > 0 ? 9.5 * Math.sqrt(Math.max(0, k.flashT / k.flashDur)) : 0),
       (Hn.uHeat.value = Fo((k.heat - 0.45) / 0.8) * 2.2),
-      (x.visible = Hn.uInt.value > 0 || Hn.uHeat.value > 0.02),
+      (ACT.flash.visible = Hn.uInt.value > 0 || Hn.uHeat.value > 0.02),
       ce.freeze)
     )
       return;
@@ -40370,7 +41675,7 @@ async function dm(i) {
         0.75 * Un +
         0.55 * zo +
         Math.sin(he * 0.5) * 0.004 * te;
-    e.position.set(it, gt, Ot), e.rotation.set(xn, $t, Ht, "YXZ");
+    ACT.root.position.set(it, gt - 0.22 * eqO, Ot + 0.15 * eqO), ACT.root.rotation.set(xn - 0.5 * eqO, $t - 0.3 * eqO, Ht + 0.1 * eqO, "YXZ");
   }
   return _e(), ve;
 }
@@ -41312,6 +42617,7 @@ var Yi = {
     retryIntroSeconds: 1.3,
     interactRange: 2.2,
     interactFacing: 0.45,
+    infiltrateRange: 16,
     cutSeconds: 2.4,
     patrol: { gull: 2, hound: 1 },
     waves: [
@@ -41331,6 +42637,7 @@ var Yi = {
   jC = ["北方", "东北方", "东方", "东南方", "南方", "西南方", "西方", "西北方"],
   _l = {
     intro: "玄鲸队员，这里是指挥中心。港区主控已封锁泊位。切断堆场、仓库、码头的三处中继。",
+    infiltrated: "已进入中继区。切断三处上行中继，注意机械守卫巡逻。",
     contact: "你已被发现！空中有机械飞鸥，地面有机械猎犬。消灭它们。",
     cut: [
       "第一处中继已断开。敌方已察觉，机械守卫正在赶来。",
@@ -41378,6 +42685,7 @@ function mM(i) {
       relays: [],
       cut: 0,
       allCut: !1,
+      stage: "infiltrate",
       queue: [],
       waveHot: 0,
       alertT: 0,
@@ -41490,6 +42798,7 @@ function mM(i) {
       (c.time = 0),
       (c.cut = 0),
       (c.allCut = !1),
+      (c.stage = "infiltrate"),
       (c.queue.length = 0),
       (c.waveHot = 0),
       (c.alertT = 0),
@@ -41580,6 +42889,7 @@ function mM(i) {
   }
   function D() {
     if (c.allCut) return "前往撤离艇";
+    if (c.stage === "infiltrate") return "潜入港区，接近中继区";
     let P = c.relays.length - c.cut;
     return c.cut === 0
       ? "切断三处上行中继"
@@ -41796,6 +43106,16 @@ function mM(i) {
   }
   function ue(P) {
     let V = n.alive ? $() : null;
+    if (c.stage === "infiltrate" && n.alive) {
+      let near = null;
+      for (let L of c.relays) {
+        if (!L.cut && Math.hypot(L.o.pos.x - n.pos.x, L.o.pos.z - n.pos.z) < Yi.infiltrateRange) {
+          near = L;
+          break;
+        }
+      }
+      near && ((c.stage = "cut"), o.setObjective(D()), o.radio && o.radio(_l.infiltrated, 3.2));
+    }
     for (let L of c.relays)
       L.cut ||
         (L === V && r.down("interact")
@@ -41835,6 +43155,7 @@ function mM(i) {
       F(c.cut - 1),
       c.cut >= V
         ? ((c.allCut = !0),
+          (c.stage = "extract"),
           (c.pursuitLeft = Yi.pursuitExtra),
           (c.pursuitT = 12),
           i.events.emit("objective:all", {}),
@@ -42313,6 +43634,8 @@ function tP() {
     endFrame: i,
     requestLock: i,
     exitLock: i,
+    nextWeapon: i,
+    prevWeapon: i,
   };
 }
 function nP(i) {
@@ -43053,6 +44376,17 @@ var Zv = {
     fireRange: 42,
     explodeRadius: 3,
     explodeDamage: 30,
+    suppRangeMin: 26,
+    suppRangeMax: 46,
+    suppBurst: 6,
+    suppSpread: 0.14,
+    suppDamage: 4,
+    envScanRange: 26,
+    envTriggerRange: 9,
+    envHover: 6,
+    envCooldown: 3,
+    envExplodeRadius: 4.5,
+    envExplodeDamage: 26,
   },
   Pn = Zv,
   $o = new W(),
@@ -43095,6 +44429,12 @@ function Q_(i, e, t, n) {
   let d = {
     id: 0,
     type: "gull",
+    variant: "standard",
+    flank: 0,
+    role: "free",
+    envT: 0,
+    envCd: 0,
+    envHaz: null,
     pos: a.group.position,
     alive: !1,
     hp: Pn.hp,
@@ -43191,7 +44531,13 @@ function Q_(i, e, t, n) {
         (d.spin = 0),
         (d.lostRotor = -1),
         (d.flare = 0),
-        (d.thr = 1);
+        (d.thr = 1),
+        (d.variant = b.variant || "standard"),
+        (d.flank = 0),
+        (d.role = "free"),
+        (d.envT = 0),
+        (d.envCd = 0),
+        (d.envHaz = null);
       for (let m = 0; m < 4; m++) l["rotor" + m].scale.setScalar(1);
       if (
         (l.lamp.scale.setScalar(1),
@@ -43303,6 +44649,22 @@ function Q_(i, e, t, n) {
           s.combat.explode(d.pos, Pn.explodeRadius, Pn.explodeDamage, "enemy"),
         i.retire(d));
   }
+  function HZ() {
+    let b = s.player;
+    if (!b || !s.scene || !s.scene.traverse) return null;
+    let best = null,
+      bestD = Pn.envScanRange,
+      tmp = new W();
+    s.scene.traverse((o) => {
+      let p = o.userData && o.userData.prop;
+      if (p !== "barrel" && p !== "jerry_can" && p !== "gas_cylinders") return;
+      o.updateWorldMatrix && o.updateWorldMatrix(!0, !1);
+      o.getWorldPosition && o.getWorldPosition(tmp);
+      let dist = tmp.distanceTo(b.pos);
+      dist < bestD && ((bestD = dist), (best = tmp.clone()));
+    });
+    return best;
+  }
   function x(y) {
     let b = s.player,
       m = i.t;
@@ -43322,7 +44684,11 @@ function Q_(i, e, t, n) {
         d.flipT <= 0 &&
           ((d.flipT = 3 + o() * 5),
           o() < 0.6 && (d.orbitDir = -d.orbitDir),
-          (d.orbitR = bl(d.orbitR + (o() - 0.5) * 6, Pn.rangeMin + 1, Pn.rangeMax - 2))),
+          (d.orbitR = bl(
+            d.orbitR + (o() - 0.5) * 6,
+            d.variant === "suppressor" ? Pn.suppRangeMin : Pn.rangeMin + 1,
+            d.variant === "suppressor" ? Pn.suppRangeMax : Pn.rangeMax - 2,
+          ))),
         d.noSeeT > 1.5
           ? ((E = d.lastKnown.x),
             (S = d.lastKnown.z),
@@ -43343,6 +44709,22 @@ function Q_(i, e, t, n) {
           (E = d.home.x + Math.cos(d.orbitA) * d.patrolR),
           (S = d.home.z + Math.sin(d.orbitA) * d.patrolR),
           (w = d.hoverFixed ? d.alt : d.home.y));
+    if (d.variant === "env" && A && b) {
+      (d.envCd -= y),
+        (d.envT -= y),
+        d.envT <= 0 && ((d.envT = 0.6), (d.envHaz = HZ())),
+        d.envHaz &&
+          ((E = d.envHaz.x),
+          (S = d.envHaz.z),
+          (w = d.envHaz.y + Pn.envHover),
+          d.envCd <= 0 &&
+            d.pos.distanceTo(d.envHaz) < Pn.envTriggerRange &&
+            ((d.envCd = Pn.envCooldown),
+            s.combat && s.combat.explode && s.combat.explode(d.envHaz, Pn.envExplodeRadius, Pn.envExplodeDamage, "enemy"),
+            s.fx.explosion(d.envHaz, Pn.envExplodeRadius),
+            (d.flare = 1),
+            (d.envHaz = null)));
+    }
     w > d.ceil && (w = d.ceil),
       !d.hoverFixed && w < 2.2 && (w = 2.2),
       Co.set(
@@ -43470,12 +44852,13 @@ function Q_(i, e, t, n) {
       d.atk === "idle")
     )
       A &&
-        d.los &&
+        (d.los || (d.variant === "suppressor" && d.noSeeT < 2)) &&
         d.cool <= 0 &&
         b &&
         b.alive &&
-        Math.abs(U) < 0.35 &&
-        d.pos.distanceTo(b.pos) < Pn.fireRange &&
+        Math.abs(U) < (d.variant === "suppressor" ? 0.9 : 0.35) &&
+        d.pos.distanceTo(d.variant === "suppressor" && !d.los ? d.lastKnown : b.pos) <
+          (d.variant === "suppressor" ? Pn.suppRangeMax : Pn.fireRange) &&
         i.requestToken(d) &&
         ((d.atk = "tele"),
         (d.atkT = Pn.telegraph),
@@ -43490,16 +44873,25 @@ function Q_(i, e, t, n) {
         (d.flare = Math.min(1, d.flare + y * 4.5)),
         A
           ? d.atkT <= 0 &&
-            ((d.atk = "burst"), (d.shots = Pn.burst), (d.atkT = 0), (d.lead = 0.2 + o() * 0.65))
+            ((d.atk = "burst"),
+            (d.shots = d.variant === "suppressor" ? Pn.suppBurst : Pn.burst),
+            (d.atkT = 0),
+            (d.lead = 0.2 + o() * 0.65))
           : ((d.atk = "idle"), i.releaseToken(d));
     else if (d.atk === "burst" && ((d.atkT -= y), (d.flare = 1), d.atkT <= 0)) {
       if (((d.atkT = Pn.burstGap), d.shots--, b)) {
-        let P = d.muzzle.distanceTo(b.pos),
-          V = P / Pn.boltSpeed;
-        ou.set(b.pos.x + b.vel.x * V * d.lead, b.pos.y + 1.05, b.pos.z + b.vel.z * V * d.lead),
-          Bs.copy(ou).sub(d.muzzle).normalize();
+        let blind = d.variant === "suppressor" && !d.los;
+        if (blind) ou.set(d.lastKnown.x, d.lastKnown.y + 1.05, d.lastKnown.z);
+        else {
+          let P = d.muzzle.distanceTo(b.pos),
+            V = P / Pn.boltSpeed;
+          ou.set(b.pos.x + b.vel.x * V * d.lead, b.pos.y + 1.05, b.pos.z + b.vel.z * V * d.lead);
+        }
+        Bs.copy(ou).sub(d.muzzle).normalize();
         let Y =
-          (Pn.spreadFar + (Pn.spreadNear - Pn.spreadFar) * d.exposure) *
+          (d.variant === "suppressor"
+            ? Pn.suppSpread
+            : Pn.spreadFar + (Pn.spreadNear - Pn.spreadFar) * d.exposure) *
           (1 + i.playerSpeed * 0.45) *
           (_ ? 1.5 : 1);
         (Bs.x += (o() - 0.5) * 2 * Y),
@@ -43550,6 +44942,9 @@ var Kv = {
     lungeSpeed: 9.5,
     replan: 0.6,
     smokeBelow: 0.4,
+    shieldMax: 90,
+    rageSpeedMul: 1.45,
+    rageCooldownMul: 0.65,
   },
   Gt = Kv,
   ni = $v,
@@ -43611,6 +45006,15 @@ function iM(i, e, t, n) {
     m = {
       id: 0,
       type: "hound",
+      variant: "standard",
+      flank: 0,
+      role: "free",
+      tac: "flank",
+      tacT: 0,
+      shield: 0,
+      shieldMax: 0,
+      ePhase: "shield",
+      shieldT: 0,
       pos: a.group.position,
       alive: !1,
       hp: Gt.hp,
@@ -43686,6 +45090,20 @@ function iM(i, e, t, n) {
       maxSpeed: Gt.patrolSpeed,
       damage(T, D, C, G) {
         if (!m.alive) return !1;
+        if (m.variant === "elite" && m.shield > 0) {
+          (m.shield -= T),
+            (m.shieldT = 0.18),
+            (m.flare = 1),
+            s.events.emit("enemy:hit", { enemy: m, point: D, part: "shield" }),
+            s.fx.sparks(m.pos, jv, 12);
+          if (m.shield <= 0) {
+            (m.shield = 0),
+              (m.ePhase = "rage"),
+              s.fx.sparks(m.pos, jv, 20),
+              s.events.emit("enemy:telegraph", { enemy: m, type: "hound", time: 0.4, pos: m.pos, elite: !0 });
+          }
+          return i.provoke(m), !1;
+        }
         if (
           ((m.hp -= T), s.events.emit("enemy:hit", { enemy: m, point: D, part: G || "body" }), C)
         ) {
@@ -43744,6 +45162,15 @@ function iM(i, e, t, n) {
           (m.dieT = 0),
           (m.tyaw = m.hyaw = 0),
           (m.tpitch = m.hpitch = 0);
+        (m.variant = D.variant || "standard"),
+        (m.flank = 0),
+        (m.role = "free"),
+        (m.tac = "flank"),
+        (m.tacT = 0),
+        (m.shield = m.variant === "elite" ? Gt.shieldMax : 0),
+        (m.shieldMax = Gt.shieldMax),
+        (m.ePhase = "shield"),
+        (m.shieldT = 0);
         for (let C of [m.sY, m.sP, m.sR, m.sL, m.sA, m.sA2]) (C.x = 0), (C.v = 0);
         for (let C = 0; C < 4; C++) A(b[C].p, C, m.pos.x, m.pos.z, m.yaw);
         if (
@@ -43878,7 +45305,7 @@ function iM(i, e, t, n) {
     }
     let N = Math.atan2(m.pos.z - T.pos.z, m.pos.x - T.pos.x);
     for (let Q = 0; Q < 5; Q++) {
-      let K = N + (o() - 0.5) * 2.6,
+      let K = N + m.flank * 0.85 + (o() - 0.5) * 1.7,
         ie = Gt.rangeMin + 1 + o() * (Gt.rangeMax - Gt.rangeMin - 2);
       Io.set(T.pos.x + Math.cos(K) * ie, T.pos.y, T.pos.z + Math.sin(K) * ie),
         (Io.y = s.physics.groundHeight(Io.x, Io.z, T.pos.y + 1)),
@@ -43892,6 +45319,70 @@ function iM(i, e, t, n) {
       (m.moveT = 0),
       (m.bursts = 0);
   }
+  function taCover() {
+    let T = s.player;
+    if (!T) return null;
+    let fy = T.yaw ?? 0,
+      fx = Math.sin(fy),
+      fz = Math.cos(fy),
+      cur = Math.hypot(m.pos.x - T.pos.x, m.pos.z - T.pos.z),
+      best = null,
+      bestD = 1 / 0,
+      C = T.eye || T.pos,
+      G = (Q) => {
+        if (!Q) return;
+        let ie = Math.hypot(Q.x - T.pos.x, Q.z - T.pos.z);
+        if (ie > cur - 1.5 || ie < Gt.rangeMin) return;
+        if (s.physics.nav.isWalkable && !s.physics.nav.isWalkable(Q.x, Q.z)) return;
+        let F = ie + Math.hypot(Q.x - m.pos.x, Q.z - m.pos.z) * 0.7 + o() * 2,
+          X = Q.x - T.pos.x,
+          ne = Q.z - T.pos.z,
+          side = fz * X - fx * ne;
+        m.flank && Math.sign(side) !== m.flank && (F += 12),
+          Vf.set(Q.x, Q.y + 0.95, Q.z),
+          s.physics.lineOfSight(Vf, C) || (F += 18),
+          F < bestD && ((bestD = F), (best = Q));
+      },
+      j = s.level && s.level.coverPoints;
+    if (j) for (let Q = 0; Q < j.length; Q++) G(j[Q]);
+    Io.set(
+      m.pos.x + (T.pos.x - m.pos.x) * 0.4,
+      0,
+      m.pos.z + (T.pos.z - m.pos.z) * 0.4,
+    );
+    for (let Q = 0; Q < 6; Q++) {
+      let K = s.physics.nav.randomPoint(Io, Math.max(4, cur * 0.35));
+      K && ((K.y = s.physics.groundHeight(K.x, K.z, T.pos.y + 1)), G(K));
+    }
+    return best;
+  }
+  function taStart() {
+    let T = s.player;
+    if (!T) return;
+    let K = Math.hypot(T.pos.x - m.pos.x, T.pos.z - m.pos.z);
+    if (K < Gt.rangeMin + 1) {
+      (m.tac = "hold"), (m.tacT = 1.5);
+      return;
+    }
+    let cp = taCover();
+    if (cp) {
+      m.firePos.copy(cp);
+      m.firePlayer.copy(T.pos);
+      _(m.firePos, !0);
+      (m.es = "move"), (m.esT = 0), (m.moveT = 0), (m.bursts = 0);
+    } else (m.tac = "hold"), (m.tacT = 1.2 + o() * 1.8), w();
+  }
+  function ta(T) {
+    let D = s.player;
+    if (!D || D.alive === !1) return;
+    m.tacT -= T;
+    let idle = m.es === "aim" || m.es === "cool";
+    if (m.tac === "flank") m.tacT <= 0 && idle && ((m.tac = "advance"), taStart());
+    else if (m.tac === "hold") {
+      let K = Math.hypot(D.pos.x - m.pos.x, D.pos.z - m.pos.z);
+      K > Gt.rangeMin + 1 && m.tacT <= 0 && idle && ((m.tac = "advance"), taStart());
+    }
+  }
   function S(T) {
     let D = s.player,
       C = i.t;
@@ -43904,8 +45395,8 @@ function iM(i, e, t, n) {
         (m.path = null),
         (m.waitT = 0),
         m.mode === "engage"
-          ? w()
-          : (m.es === "tele" || m.es === "burst") && (i.releaseToken(m), (m.es = "move"))),
+          ? ((m.tac = "flank"), (m.tacT = 1 + o() * 1.2), w())
+          : ((m.tac = "flank"), (m.es === "tele" || m.es === "burst") && (i.releaseToken(m), (m.es = "move")))),
       (m.wantYaw = m.yaw),
       (m.maxSpeed = 0),
       (m.cool -= T),
@@ -43934,7 +45425,7 @@ function iM(i, e, t, n) {
           (m.wantYaw = m.yaw + Math.sin(m.scan * 0.8) * 0.9),
           (j = null));
     } else if (D) {
-      (G = D.pos), (j = D.pos);
+      (G = D.pos), (j = D.pos), ta(T);
       let I = Math.atan2(D.pos.x - m.pos.x, D.pos.z - m.pos.z);
       switch (
         ((m.es === "move" || m.es === "aim" || m.es === "cool") &&
@@ -43955,10 +45446,13 @@ function iM(i, e, t, n) {
       ) {
         case "move": {
           m.moveT += T;
-          let se = E(T, Gt.runSpeed),
+          let se = E(T, Gt.runSpeed * (m.variant === "elite" && m.ePhase === "rage" ? Gt.rageSpeedMul : 1)),
             ae = K > Gt.rangeMin - 1 && K < Gt.rangeMax + 2;
           se || (m.moveT > 1.4 && m.los && ae && o() < T * 0.7) || m.moveT > 7
-            ? ((m.es = "aim"), (m.esT = 0), (m.hasGoal = !1))
+            ? (m.tac === "advance" && ((m.tac = "hold"), (m.tacT = 1.1 + o() * 1.8)),
+              (m.es = "aim"),
+              (m.esT = 0),
+              (m.hasGoal = !1))
             : D.pos.distanceToSquared(m.firePlayer) > 49 && w();
           break;
         }
@@ -44000,9 +45494,13 @@ function iM(i, e, t, n) {
             m.esT <= 0 && ((m.esT = Gt.burstGap), m.shots--, z(D)),
             m.shots <= 0 &&
               (i.releaseToken(m),
-              (m.cool = Gt.cooldown[0] + o() * (Gt.cooldown[1] - Gt.cooldown[0])),
+              (m.cool =
+                (Gt.cooldown[0] + o() * (Gt.cooldown[1] - Gt.cooldown[0])) *
+                (m.variant === "elite" && m.ePhase === "rage" ? Gt.rageCooldownMul : 1)),
               m.bursts++,
-              m.bursts >= 1 + (o() < 0.4 ? 1 : 0) ? w() : ((m.es = "cool"), (m.esT = 0)));
+              m.bursts >= 1 + (o() < 0.4 ? 1 : 0)
+                ? (m.tac === "hold" ? ((m.es = "cool"), (m.esT = 0)) : w())
+                : ((m.es = "cool"), (m.esT = 0)));
           break;
         }
         case "wind": {
@@ -44123,8 +45621,9 @@ function iM(i, e, t, n) {
     (m.hyaw += (Y - m.hyaw) * oe), (m.hpitch += (L - m.hpitch) * oe), O(T);
     let fe = (i.t * (m.mode === "patrol" ? 0.8 : 2.2) + m.phase) % 1;
     l.beacon.scale.setScalar(fe < 0.12 || (fe > 0.22 && fe < 0.3) ? 1 : 1e-4);
-    let le = m.mode === "engage" ? NC : _m,
-      R = 1 + m.flare * 3.5;
+    let le = m.mode === "engage" ? NC : _m;
+    m.variant === "elite" && m.shield > 0 && (le = [3, 9, 14]);
+    let R = 1 + m.flare * 3.5;
     for (let I = 0; I < 3; I++) m.lensC[I] += (le[I] - m.lensC[I]) * (1 - Math.exp(-8 * T));
     r.color.setRGB(m.lensC[0] * R, m.lensC[1] * R, m.lensC[2] * R),
       (m.flare = Math.max(0, m.flare - T * 2)),
@@ -44566,6 +46065,32 @@ async function Em(i) {
             j.pos.distanceToSquared(T) > D * D ||
             (j.lastKnown.copy(C), (j.mode = "investigate"), (j.modeT = 9 + e() * 4));
       },
+      squadAssign() {
+        let D = i.player;
+        if (!D) return;
+        let engaged = [];
+        for (let j of t) j.alive && !j.passive && j.mode === "engage" && engaged.push(j);
+        if (engaged.length < 2) return;
+        let fy = D.yaw ?? 0,
+          fx = Math.sin(fy),
+          fz = Math.cos(fy);
+        engaged.sort(
+          (p, q) => Math.atan2(p.pos.x - D.pos.x, p.pos.z - D.pos.z) - Math.atan2(q.pos.x - D.pos.x, q.pos.z - D.pos.z),
+        );
+        let neg = 0,
+          pos = 0;
+        for (let j of engaged) {
+          let dx = j.pos.x - D.pos.x,
+            dz = j.pos.z - D.pos.z,
+            side = fz * dx - fx * dz;
+          j.flank = side > 2 ? 1 : side < -2 ? -1 : j.flank || 0;
+          j.role =
+            j.variant === "suppressor" ? "suppressor" : j.variant === "env" ? "flanker" : j.variant === "elite" ? "anchor" : "flanker";
+          j.flank < 0 ? neg++ : j.flank > 0 && pos++;
+        }
+        if ((!neg || !pos) && engaged.length >= 2)
+          for (let k = 0; k < engaged.length; k++) engaged[k].flank = k % 2 ? 1 : -1;
+      },
       provoke(T) {
         let D = i.player;
         !D ||
@@ -44592,7 +46117,8 @@ async function Em(i) {
           G.pos.copy(T),
           G.dir.copy(D),
           G.from.copy(T),
-          (G.len = 0));
+          (G.len = 0),
+          (G.dmg = C && C.variant === "suppressor" ? Pn.suppDamage : Pn.boltDamage));
       },
       addWreck(T) {
         for (n.push(T); n.length > Ui.maxWrecks; ) {
@@ -44662,7 +46188,7 @@ async function Em(i) {
           HC(j.pos, oM, cM, uM) < 0.36 * 0.36 && (ie = !0)),
         ie)
       ) {
-        D.damage(Ui.gull.boltDamage, j.from), (j.on = !1);
+        D.damage(j.dmg ?? Ui.gull.boltDamage, j.from), (j.on = !1);
         continue;
       }
       if (Q) {
@@ -44805,6 +46331,7 @@ async function Em(i) {
           let C = D.vel ? Math.hypot(D.vel.x, D.vel.z) : D.speed || 0;
           h.playerSpeed += (C - h.playerSpeed) * (1 - Math.exp(-6 * T));
         }
+        h.squadAssign();
         for (let C = t.length - 1; C >= 0; C--) t[C]._update(T);
         _(T), H(T);
       },
@@ -44886,6 +46413,14 @@ async function VC(i) {
       (s = [2.1, 1, 2.3]),
       (o = [0.5, 0.62, 0.4]),
       (r = 1.25);
+  else if (n === "squad")
+    e.spawn("hound", t(-8, 0, -10), { state: "alert" }),
+      e.spawn("hound", t(8, 0, -9), { state: "alert", variant: "elite" }),
+      e.spawn("gull", t(-6, 6, -13), { state: "alert", variant: "suppressor" }),
+      e.spawn("gull", t(7, 5, -12), { state: "alert", variant: "env" }),
+      (s = [6, 3, 12]),
+      (o = [0, 2.2, -5]),
+      (r = 7);
   else if (n === "fight")
     e.spawn("hound", t(-7, 0, -9), { state: "alert" }),
       e.spawn("hound", t(8, 0, -7), { state: "alert" }),

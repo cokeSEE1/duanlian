@@ -13681,6 +13681,7 @@ ${fe}`,
       sharpen: 0.3,
       lookPower: 1.18,
       lookSat: 1.22,
+      taaFeedback: 0.12,
     },
     x = !1;
   try {
@@ -13688,10 +13689,35 @@ ${fe}`,
   } catch {
     x = !1;
   }
+  const taaFrag = `${Js}
+uniform sampler2D tColor, tHistory, tDepth; uniform mat4 uInvViewProj, uPrevViewProj; uniform vec2 uRes; uniform float uFeedback;
+void main(){
+vec4 cur = texture2D(tColor, vUv);
+float d = texture2D(tDepth, vUv).r;
+if (d < ${n1} || d >= 0.9999) { gl_FragColor = cur; return; }
+vec4 wp = uInvViewProj * vec4(vUv * 2.0 - 1.0, d * 2.0 - 1.0, 1.0); wp /= wp.w;
+vec4 pc = uPrevViewProj * wp;
+vec2 puv = pc.xy / max(pc.w, 1e-4) * 0.5 + 0.5;
+if (pc.w <= 0.0 || puv.x < 0.0 || puv.x > 1.0 || puv.y < 0.0 || puv.y > 1.0) { gl_FragColor = cur; return; }
+vec3 hist = texture2D(tHistory, puv).rgb;
+vec3 mn = cur.rgb, mx = cur.rgb;
+for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) {
+  vec3 c = texture2D(tColor, vUv + vec2(float(x), float(y)) / uRes).rgb;
+  mn = min(mn, c); mx = max(mx, c);
+}
+vec3 box = (mn + mx) * 0.5, halfRange = (mx - mn) * 0.5 + vec3(1e-4);
+hist = clamp(hist, box - halfRange, box + halfRange);
+gl_FragColor = vec4(mix(cur.rgb, hist, uFeedback), 1.0);
+}`,
+    blitFrag = `${Js}
+uniform sampler2D tSrc;
+void main(){ gl_FragColor = vec4(texture2D(tSrc, vUv).rgb, 1.0); }`;
   let y = {
       scene: p(c, h),
       motion: p(c, h),
+      taa: [p(c, h), p(c, h)],
       ldr: p(u, h),
+      final: p(u, h),
       depthHalf: x ? p(as, f, { format: J0 }) : p(c, f),
       aoA: p(u, f),
       aoB: p(u, f),
@@ -13880,12 +13906,24 @@ ${fe}`,
       uSharpen: { value: g.sharpen },
       uFxaa: { value: 1 },
     }),
+    taaM = a("taa", taaFrag, {
+      tColor: { value: null },
+      tHistory: { value: null },
+      tDepth: { value: null },
+      uInvViewProj: { value: new Ye() },
+      uPrevViewProj: { value: new Ye() },
+      uRes: { value: new Ae() },
+      uFeedback: { value: 0.1 },
+    }),
+    blitM = a("blit", blitFrag, { tSrc: { value: null } }),
     ie = new Ye(),
     F = new Ye(),
     X = new Ye(),
     ne = new W(),
     re = new W(),
-    $ = !1;
+    $ = !1,
+    taaN = 0,
+    ta = 0;
   function ue() {
     let oe = Math.max(6, d().volSteps | 0),
       fe = d().name === "test" || d().name === "low" ? 8 : d().name === "ultra" ? 16 : 12;
@@ -13903,6 +13941,9 @@ ${fe}`,
       y.scene.setSize(oe, fe),
       y.motion.setSize(oe, fe),
       y.ldr.setSize(oe, fe),
+      y.taa[0].setSize(oe, fe),
+      y.taa[1].setSize(oe, fe),
+      y.final.setSize(oe, fe),
       y.depthCopy)
     ) {
       y.depthCopy.setSize(oe, fe);
@@ -14019,7 +14060,8 @@ ${fe}`,
         q.uniforms.uDir.value.set(0, We),
         l(q, y.volA);
     }
-    {
+    let xe;
+    if (Ne || dt) {
       let be = U.uniforms;
       (be.tColor.value = oe.texture),
         (be.tDepth.value = Fe),
@@ -14029,14 +14071,27 @@ ${fe}`,
         (be.uAoOn.value = Ne ? 1 : 0),
         (be.uVolOn.value = dt ? 1 : 0),
         l(U, y.scene);
+      xe = y.scene.texture;
+    } else xe = oe.texture;
+    ie.multiplyMatrices(fe.projectionMatrix, fe.matrixWorldInverse);
+    if (ve.name !== "test" && ve.name !== "low" && !(e.params && e.params.taa === "0") && $ && R > 0) {
+      let be = taaM.uniforms;
+      (be.tColor.value = xe),
+        (be.tHistory.value = y.taa[ta].texture),
+        (be.tDepth.value = Fe),
+        be.uInvViewProj.value.copy(X.copy(ie).invert()),
+        be.uPrevViewProj.value.copy(F),
+        be.uRes.value.set(M.w, M.h),
+        (be.uFeedback.value = taaN === 0 ? 0 : g.taaFeedback),
+        l(taaM, y.taa[1 - ta]),
+        (xe = y.taa[1 - ta].texture),
+        (ta = 1 - ta),
+        taaN++;
     }
-    let xe = y.scene.texture;
-    if (
-      (ie.multiplyMatrices(fe.projectionMatrix, fe.matrixWorldInverse),
-      ve.motionBlur && $ && R > 0)
-    ) {
+    if (ve.motionBlur && $ && R > 0) {
       let be = T.uniforms;
-      (be.tDepth.value = Fe),
+      (be.tColor.value = xe),
+        (be.tDepth.value = Fe),
         be.uInvViewProj.value.copy(X.copy(ie).invert()),
         be.uPrevViewProj.value.copy(F),
         (be.uShutter.value = Math.min(0.5, 1 / 190 / Math.max(R, 0.001))),
@@ -14125,8 +14180,9 @@ ${fe}`,
       be.uTexel.value.set(1 / M.w, 1 / M.h),
         (be.uTime.value = ae),
         (be.uGrain.value = g.grain),
-        (be.uSharpen.value = g.sharpen),
-        l(K, null);
+        (be.uSharpen.value = g.sharpen);
+      if (M.w === i.domElement.width && M.h === i.domElement.height) l(K, null);
+      else (l(K, y.final), (blitM.uniforms.tSrc.value = y.final.texture), l(blitM, null));
     }
   }
   let V = (oe) => (oe > 0 ? (oe < 1 ? oe : 1) : 0);
@@ -14144,6 +14200,8 @@ ${fe}`,
       y.streakA,
       y.streakB,
       y.dirt,
+      ...y.taa,
+      y.final,
       ...y.down,
       ...y.up,
       ...y.adapt,
@@ -14415,7 +14473,37 @@ async function Hg(i) {
     },
     U = { calls: 0, tris: 0 },
     T = 0,
-    D = 0;
+    D = 0,
+    taaJx = 0,
+    taaJy = 0,
+    taaJActive = !1;
+  function taaHalton(base, index) {
+    let f = 0,
+      d = 1;
+    for (let n = index; n > 0; n = Math.floor(n / base)) (d /= base), (f += d * (n % base));
+    return f;
+  }
+  function taaApplyJitter() {
+    let sw = A.size.w,
+      sh = A.size.h,
+      hx = taaHalton(2, T) - 0.5,
+      hy = taaHalton(3, T) - 0.5,
+      ox = (hx * 2) / sw,
+      oy = (hy * 2) / sh;
+    a.projectionMatrix.elements[8] += ox;
+    a.projectionMatrix.elements[9] += oy;
+    l.projectionMatrix.elements[8] += ox;
+    l.projectionMatrix.elements[9] += oy;
+    (taaJx += ox), (taaJy += oy), (taaJActive = !0);
+  }
+  function taaClearJitter() {
+    if (!taaJActive) return;
+    a.projectionMatrix.elements[8] -= taaJx;
+    a.projectionMatrix.elements[9] -= taaJy;
+    l.projectionMatrix.elements[8] -= taaJx;
+    l.projectionMatrix.elements[9] -= taaJy;
+    (taaJx = 0), (taaJy = 0), (taaJActive = !1);
+  }
   function C() {
     a.updateMatrixWorld(!0),
       (l.matrixAutoUpdate = !1),
@@ -14438,6 +14526,11 @@ async function Hg(i) {
       (n.toneMappingExposure = 1),
       n.setRenderTarget(m),
       n.clear(!0, !0, !1),
+      taaClearJitter(),
+      i.quality.name !== "test" &&
+        i.quality.name !== "low" &&
+        e.taa !== "0" &&
+        taaApplyJitter(),
       (i.quality.name === "ultra" || e.shot || (T & 1) === 0 || !h.shadow.map) &&
         (n.shadowMap.needsUpdate = !0),
       n.render(r, a),
@@ -14462,22 +14555,20 @@ async function Hg(i) {
     } finally {
       s.depthRange(0, 1), (r.environmentIntensity = F), (r.environment = X);
     }
-    if (
-      (A.run({
-        hdr: m,
-        camera: a,
-        sun: h,
-        dt: ie,
-        post: N.post,
-        exposure: N.exposure,
-        time: i.time ? i.time.t : T / 60,
-        fast: M,
-        thunder: w.value,
-      }),
-      n.setRenderTarget(null),
-      o.post)
-    )
-      throw new Error("a post shader failed to compile");
+    A.run({
+      hdr: m,
+      camera: a,
+      sun: h,
+      dt: ie,
+      post: N.post,
+      exposure: N.exposure,
+      time: i.time ? i.time.t : T / 60,
+      fast: M,
+      thunder: w.value,
+    });
+    taaClearJitter();
+    n.setRenderTarget(null);
+    if (o.post) throw new Error("a post shader failed to compile");
   }
   let N = {
       renderer: n,
@@ -14625,6 +14716,7 @@ async function Hg(i) {
             j(ie);
           } catch (ne) {
             _ = !1;
+            taaClearJitter();
             try {
               s.depthRange(0, 1), n.setRenderTarget(null);
             } catch {}
@@ -14662,9 +14754,13 @@ async function Hg(i) {
       re = F.min.y + Math.min(2.4, (F.max.y - F.min.y) * 0.4);
     if (!Q) {
       let ee = new D0(128, { type: js, generateMipmaps: !1 });
-      (Q = { cubeRT: ee, cam: new z0(0.15, 300, ee), pmrem: new ia(n), out: null }),
+      (Q = { cubeRT: ee, cam: new z0(0.15, 300, ee), pmrem: new ia(n), out: null, bakeKey: "", bakeAt: 0 }),
         Q.cam.layers.set(vf);
     }
+    let bk = X.toFixed(2) + "|" + re.toFixed(2) + "|" + ne.toFixed(2),
+      tm = performance.now();
+    if (Q.bakeKey === bk || (Q.bakeAt && tm - Q.bakeAt < 500)) return;
+    (Q.bakeKey = bk), (Q.bakeAt = tm);
     Q.cam.position.set(X, re, ne), Q.cam.updateMatrixWorld(!0);
     let $ = n.toneMapping;
     (n.toneMapping = ys), (u.material.uniforms.uEnv.value = 1), (n.shadowMap.needsUpdate = !0);

@@ -6725,6 +6725,8 @@ var h_ = {
     ControlLeft: "crouch",
     ControlRight: "crouch",
     KeyR: "reload",
+    Digit1: "wep1",
+    Digit2: "wep2",
     KeyE: "interact",
     KeyF: "melee",
     KeyV: "melee",
@@ -6792,6 +6794,12 @@ function v_(i) {
       },
       onModeChange(P) {
         h.push(P);
+      },
+      nextWeapon() {
+        i.weapon && i.weapon.nextWeapon && i.weapon.nextWeapon();
+      },
+      prevWeapon() {
+        i.weapon && i.weapon.prevWeapon && i.weapon.prevWeapon();
       },
       describeMode() {
         return f.mode === "touch"
@@ -6883,6 +6891,10 @@ function v_(i) {
           (f.look.dy += Y * f_ * f.sensitivity * (f.invertY ? -1 : 1));
       }
     }),
+    addEventListener("wheel", (P) => {
+      if (!(r && (f.locked || f.mode === "drag"))) return;
+      P.deltaY > 0 ? f.nextWeapon() : f.prevWeapon();
+    }, { passive: !0 }),
     document.addEventListener("pointerlockchange", () => {
       if (((f.locked = document.pointerLockElement === e), f.locked))
         (a = !0), (l = 0), (c = 0), f.touch || p("lock");
@@ -9991,6 +10003,62 @@ vObjP = position; vONrm = normal; vWNrm = normalize(mat3(modelMatrix) * normal);
     i
   );
 }
+var WEAPON_DEFS = {
+    pac9: {
+      id: "pac9",
+      name: "PAC-9 冲锋枪",
+      mode: "auto",
+      damage: 26,
+      rpm: 720,
+      magSize: 30,
+      reserve: 150,
+      spreadBase: 0.0125,
+      range: 300,
+      pellets: 1,
+      reloadTactical: 2.1,
+      reloadEmpty: 2.72,
+    },
+    shotgun: {
+      id: "shotgun",
+      name: "玄鲸 M4 霰弹枪",
+      mode: "pump",
+      damage: 13,
+      rpm: 68,
+      magSize: 6,
+      reserve: 36,
+      spreadBase: 0.055,
+      range: 60,
+      pellets: 8,
+      reloadTactical: 2.4,
+      reloadEmpty: 3.1,
+    },
+    rifle: {
+      id: "rifle",
+      name: "玄鲸 DMR 精确步枪",
+      mode: "semi",
+      damage: 95,
+      rpm: 150,
+      magSize: 5,
+      reserve: 30,
+      spreadBase: 0.004,
+      range: 600,
+      pellets: 1,
+      reloadTactical: 2.3,
+      reloadEmpty: 2.9,
+    },
+  },
+  DROP_TABLE = { hound: "shotgun", gull: "rifle" },
+  loadoutState = {
+    owned: ["pac9"],
+    current: 0,
+    pool: {
+      pac9: { mag: 30, reserve: 150 },
+      shotgun: { mag: 6, reserve: 0 },
+      rifle: { mag: 5, reserve: 0 },
+    },
+    droppedFirst: {},
+    pickups: [],
+  };
 var gi = W,
   fm = Lt,
   Gv = 30,
@@ -10016,6 +10084,9 @@ var i0 = (i, e, t, n = "XYZ") => new fm().setFromEuler(new In(i, e, t, n));
 async function dm(i) {
   let e = new wt();
   e.name = "viewmodel-pac9";
+  let ACT = null,
+    vmVisible = !0,
+    VIEWS = { pac9: null, shotgun: null, rifle: null };
   let t = w_(),
     n = { anodized_black: 2, gunmetal: 2, brass: 4, glove_fabric: 3, rubber: 4 },
     s = (Me) => i.mats.get(Me, { triplanar: !0, vertexColors: !0, scale: n[Me] || 1 }),
@@ -10241,6 +10312,735 @@ async function dm(i) {
   }
   q.position.copy(G.p), q.quaternion.copy(G.q);
   let R = C.clone().invert();
+  ACT = {
+    id: "pac9",
+    root: e,
+    flash: x,
+    bolt: h,
+    boltTravel: mi.boltTravel,
+    mag: d,
+    muzzle: mi.muzzle,
+    eject: mi.eject,
+    finger: z,
+    reloadVisual(Pt, Je) {
+      le(Je.empty ? ue : $, Pt),
+        q.position.copy(Y),
+        q.quaternion.copy(L),
+        Pt >= me && Pt < ee
+          ? (Z.copy(L).multiply(R),
+            f.quaternion.copy(Z),
+            f.position.copy(p).sub(j.p).applyQuaternion(Z).add(Y))
+          : (f.quaternion.identity(), f.position.copy(p));
+    },
+    reloadDone() {
+      q.position.copy(G.p), q.quaternion.copy(G.q);
+    },
+    resetVisual() {
+      (d.visible = !0),
+        (f.visible = !0),
+        f.position.copy(p),
+        f.quaternion.identity(),
+        q.position.copy(G.p),
+        q.quaternion.copy(G.q);
+    },
+  };
+  function cloneHand(src, pos) {
+    let g = new wt();
+    for (let child of src.children)
+      if (child.isMesh) {
+        let mm = new Qe(child.geometry.clone(), child.material);
+        (mm.castShadow = !1), (mm.receiveShadow = !0), (mm.frustumCulled = !1);
+        g.add(mm);
+      }
+    return g.position.copy(pos), g;
+  }
+  function matBf(hex, rough, metal, kind, name) {
+    let m = new Qt({ color: new Ve(hex), roughness: rough, metalness: metal, vertexColors: !0 });
+    return (m.name = name), Bf(m, kind), m;
+  }
+  function bindFinger(hand, base, tip) {
+    let idx = hand.children.length ? hand.children[hand.children.length - 1] : null;
+    if (!idx || !idx.isMesh || !idx.geometry || idx.geometry.attributes.position.count !== base.attributes.position.count) return null;
+    let E = base.attributes,
+      w = tip.attributes,
+      S = -1;
+    return (Me) => {
+      if (Math.abs(Me - S) < 0.004) return;
+      S = Me;
+      let we = idx.geometry.attributes.position,
+        be = idx.geometry.attributes.normal,
+        Oe = E.position.array,
+        pt = w.position.array,
+        ut = E.normal.array,
+        nn = w.normal.array;
+      for (let bt = 0; bt < Oe.length; bt++)
+        (we.array[bt] = Oe[bt] + (pt[bt] - Oe[bt]) * Me),
+          (be.array[bt] = ut[bt] + (nn[bt] - ut[bt]) * Me);
+      (we.needsUpdate = !0), (be.needsUpdate = !0);
+    };
+  }
+  function RB(w, h, d, r, x, y, z, mat, color, boost = 0, rot = null) {
+    return o(Rt(w, h, d, r, x, y, -z, color, boost, rot), mat);
+  }
+  function TB(profile, seg, mat, color, boost = 0, x = 0, y = 0) {
+    return o(Cn(profile, seg, color, boost, x, y), mat);
+  }
+  function railTooth(za, y, mat, color, boost) {
+    return o(
+      qo(
+        [
+          [-0.0106, y],
+          [0.0106, y],
+          [0.0106, y + 0.0016],
+          [0.0065, y + 0.005],
+          [-0.0065, y + 0.005],
+          [-0.0106, y + 0.0016],
+        ],
+        -za,
+        -za + 0.0046,
+        5e-4,
+        color,
+        boost,
+      ),
+      mat,
+    );
+  }
+  function buildShotgun() {
+    let root = new wt();
+    root.name = "viewmodel-shotgun";
+    let steel = matBf(0x2c3138, 0.4, 0.84, 1, "shotgun_steel"),
+      darkSteel = matBf(0x1c1f24, 0.5, 0.8, 0, "shotgun_dark"),
+      wood = s("wood_dark"),
+      rubber = s("rubber"),
+      brass = s("brass"),
+      gun = s("gunmetal");
+    let Y0 = 0.03,
+      ST = [1, 1, 1],
+      WD = [1.18, 0.84, 0.52],
+      GU = [0.9, 0.92, 0.98];
+    // barrel (lathe, bore axis Y0)
+    root.add(
+      TB(
+        [
+          [0.014, 0.04],
+          [0.0155, 0.04],
+          [0.0155, 0.3],
+          [0.0145, 0.43],
+          [0.014, 0.44],
+        ],
+        20,
+        gun,
+        GU,
+        0.2,
+        0,
+        Y0,
+      ),
+    );
+    // barrel shank / chamber collar
+    root.add(
+      TB(
+        [
+          [0.011, 0.015],
+          [0.017, 0.015],
+          [0.018, 0.03],
+          [0.018, 0.05],
+          [0.017, 0.07],
+          [0.011, 0.07],
+        ],
+        16,
+        steel,
+        ST,
+        3,
+        0,
+        Y0,
+      ),
+    );
+    // ventilated top rib
+    root.add(o(qo([[-0.004, 0], [0.004, 0], [0.004, 0.0035], [-0.004, 0.0035]], 0.02, 0.4, 3e-4, ST, 0.2).translate(0, Y0 + 0.0135, 0), darkSteel));
+    // magazine tube below barrel
+    root.add(
+      TB(
+        [
+          [0.011, -0.03],
+          [0.0125, -0.03],
+          [0.0125, 0.32],
+          [0.012, 0.34],
+          [0.011, 0.34],
+        ],
+        16,
+        darkSteel,
+        [0.85, 0.88, 0.95],
+        0.15,
+        0,
+        -0.002,
+      ),
+    );
+    // tube end cap (brass)
+    root.add(
+      TB(
+        [
+          [0.011, 0.335],
+          [0.014, 0.335],
+          [0.0145, 0.342],
+          [0.013, 0.35],
+          [0.0125, 0.352],
+          [0.0115, 0.352],
+        ],
+        16,
+        brass,
+        [1.15, 0.95, 0.6],
+        0.1,
+        0,
+        -0.002,
+      ),
+    );
+    // barrel band
+    root.add(
+      TB(
+        [
+          [0.0125, 0.33],
+          [0.0185, 0.33],
+          [0.0195, 0.336],
+          [0.0195, 0.348],
+          [0.0185, 0.354],
+          [0.0125, 0.354],
+        ],
+        16,
+        steel,
+        ST,
+        2,
+        0,
+        0.012,
+      ),
+    );
+    // receiver (side-profile extrusion, chamfered, barrel socket + loading port)
+    root.add(
+      o(
+        xr(
+          [
+            [-0.2, -0.024],
+            [-0.2, 0.016],
+            [0.02, 0.016],
+            [0.04, 0.024],
+            [0.04, 0.03],
+            [0.04, 0.01],
+            [0.04, -0.02],
+            [0.018, -0.034],
+            [-0.02, -0.034],
+            [-0.03, -0.05],
+            [-0.11, -0.05],
+            [-0.2, -0.024],
+          ],
+          -0.018,
+          0.018,
+          0.003,
+          ST,
+          3,
+        ),
+        steel,
+      ),
+    );
+    // ejection port (right side inset)
+    root.add(RB(0.003, 0.016, 0.05, 0.001, 0.0198, 0.003, -0.02, darkSteel, [0.35, 0.35, 0.4], 0));
+    // loading port (bottom inset)
+    root.add(RB(0.02, 0.004, 0.06, 0.0015, 0, -0.0345, -0.04, darkSteel, [0.35, 0.35, 0.4], 0));
+    // top picatinny rail
+    root.add(RB(0.022, 0.004, 0.09, 0.001, 0, 0.0185, 0.025, steel, ST, 2));
+    for (let za = 0.06; za >= -0.015; za -= 0.0096) root.add(railTooth(za, 0.0205, steel, ST, 2));
+    // bead sight (brass)
+    let bead = o(new ls(0.0055, 10, 10), brass);
+    bead.position.set(0, Y0 + 0.0165, -0.428), root.add(bead);
+    // pump forend (wood) + action bars
+    let pump = new wt();
+    pump.add(
+      o(
+        qo(
+          [
+            [-0.024, -0.022],
+            [0.024, -0.022],
+            [0.027, -0.006],
+            [0.024, 0.02],
+            [-0.024, 0.02],
+            [-0.027, -0.006],
+          ],
+          -0.105,
+          0.105,
+          0.004,
+          WD,
+          0.35,
+        ),
+        wood,
+      ),
+    );
+    for (let zz = -0.06; zz <= 0.06; zz += 0.04) pump.add(RB(0.05, 0.003, 0.008, 0.001, 0, 0.0, zz, darkSteel, [0.3, 0.3, 0.34], 0));
+    pump.add(RB(0.006, 0.004, 0.12, 0.001, -0.017, 0.006, 0.1, steel, ST, 2));
+    pump.add(RB(0.006, 0.004, 0.12, 0.001, 0.017, 0.006, 0.1, steel, ST, 2));
+    pump.position.set(0, -0.002, -0.22), root.add(pump);
+    // wood stock (curved comb + integrated pistol grip)
+    root.add(
+      o(
+        xr(
+          [
+            [-0.19, -0.028],
+            [-0.19, 0.012],
+            [-0.205, 0.013],
+            [-0.26, 0.02],
+            [-0.35, 0.016],
+            [-0.405, 0.008],
+            [-0.408, -0.01],
+            [-0.405, -0.02],
+            [-0.32, -0.028],
+            [-0.245, -0.072],
+            [-0.212, -0.085],
+            [-0.202, -0.068],
+            [-0.196, -0.044],
+            [-0.19, -0.028],
+          ],
+          -0.02,
+          0.02,
+          0.004,
+          WD,
+          0.35,
+        ),
+        wood,
+      ),
+    );
+    // rubber butt pad
+    root.add(
+      o(
+        xr(
+          [
+            [-0.405, 0.008],
+            [-0.408, -0.01],
+            [-0.405, -0.02],
+            [-0.402, 0.008],
+          ],
+          -0.0205,
+          0.0205,
+          0.001,
+          [0.85, 0.85, 0.9],
+          0.1,
+        ),
+        rubber,
+      ),
+    );
+    // trigger guard (wire loop)
+    root.add(
+      o(
+        sm(
+          Fn(
+            [
+              [-0.03, -0.046, 0.12],
+              [-0.012, -0.06, 0.12],
+              [0.006, -0.062, 0.12],
+              [0.022, -0.052, 0.12],
+              [0.03, -0.038, 0.12],
+            ],
+            0.0026,
+            10,
+            true,
+          ),
+          ST,
+          0,
+        ),
+        steel,
+      ),
+    );
+    // trigger
+    root.add(RB(0.006, 0.015, 0.004, 0.001, 0, -0.048, 0.12, steel, ST, 0, [0.2, 0, 0]));
+    // receiver pins
+    root.add(RB(0.004, 0.004, 0.004, 0.001, -0.02, 0.006, -0.02, steel, ST, 0));
+    root.add(RB(0.004, 0.004, 0.004, 0.001, 0.02, 0.006, -0.02, steel, ST, 0));
+    // muzzle flash
+    let flash = N_();
+    (flash.position.fromArray([0, Y0, -0.45]), (flash.visible = !1), root.add(flash));
+    // hands (trigger hand on grip, support hand on pump)
+    let gp = new gi(0, -0.075, 0.22),
+      lh = cloneHand(A, gp.clone().sub(new gi(0.006, -0.031, -0.085).applyQuaternion(b)));
+    lh.quaternion.copy(b), root.add(lh);
+    let pac9Forend = new gi(-0.015, -0.062, -0.236),
+      fp = new gi(0, -0.06, -0.22),
+      rh = cloneHand(q, G.p.clone().add(fp).sub(pac9Forend));
+    rh.quaternion.copy(G.q), root.add(rh);
+    let rhRest = rh.position.clone(),
+      rhQ = rh.quaternion.clone(),
+      shellPort = new gi(0.02, -0.07, 0),
+      shellKeys = [
+        [0, { p: rhRest.clone(), q: rhQ.clone() }],
+        [0.3, { p: rhRest.clone(), q: rhQ.clone() }],
+        [0.55, { p: shellPort.clone(), q: rhQ.clone() }],
+        [0.8, { p: shellPort.clone().add(new gi(0, -0.012, 0.012)), q: rhQ.clone() }],
+        [1.05, { p: shellPort.clone(), q: rhQ.clone() }],
+        [1.3, { p: shellPort.clone().add(new gi(0, -0.012, 0.012)), q: rhQ.clone() }],
+        [1.45, { p: shellPort.clone(), q: rhQ.clone() }],
+        [1.75, { p: rhRest.clone(), q: rhQ.clone() }],
+        [9, { p: rhRest.clone(), q: rhQ.clone() }],
+      ];
+    let finger = bindFinger(lh, m.index[0], m.index[1]);
+    root.traverse((x) => x.layers.set(zc));
+    return {
+      id: "shotgun",
+      root,
+      flash,
+      bolt: null,
+      boltTravel: 0,
+      mag: null,
+      muzzle: [0, Y0, -0.45],
+      eject: [0.022, 0.008, -0.05],
+      finger,
+      reloadVisual(Pt, Je) {
+        let pz = -0.22;
+        if (Pt >= 1.75 && Pt < 2) pz = -0.22 + Yo((Pt - 1.75) / 0.25) * 0.09;
+        else if (Pt >= 2 && Pt < 2.2) pz = -0.13 - Yo((Pt - 2) / 0.2) * 0.09;
+        pump.position.z = pz;
+        le(shellKeys, Pt);
+        rh.position.copy(Y);
+        rh.quaternion.copy(L);
+        Pt >= 1.75 && (rh.position.z += pz + 0.22);
+      },
+      reloadDone() {
+        pump.position.z = -0.22;
+        rh.position.copy(rhRest);
+        rh.quaternion.copy(rhQ);
+      },
+      resetVisual() {
+        pump.position.z = -0.22;
+        rh.position.copy(rhRest);
+        rh.quaternion.copy(rhQ);
+      },
+    };
+  }
+  function buildRifle() {
+    let root = new wt();
+    root.name = "viewmodel-rifle";
+    let steel = matBf(0x2a2e35, 0.4, 0.85, 1, "rifle_steel"),
+      dark = matBf(0x17191d, 0.62, 0.55, 0, "rifle_dark"),
+      poly = matBf(0x23262c, 0.6, 0.15, 2, "rifle_poly"),
+      gun = s("gunmetal"),
+      rubber = s("rubber");
+    let glass = new Qt({
+      color: new Ve(0x0a1418),
+      roughness: 0.12,
+      metalness: 0.1,
+      emissive: new Ve(0x061018),
+      emissiveIntensity: 0.5,
+    });
+    glass.name = "rifle_glass";
+    let Y0 = 0.03,
+      ST = [1, 1, 1],
+      CG = [0.9, 0.92, 0.98];
+    // long barrel (lathe)
+    root.add(
+      TB(
+        [
+          [0.011, 0.06],
+          [0.012, 0.06],
+          [0.012, 0.52],
+          [0.0115, 0.56],
+          [0.011, 0.56],
+        ],
+        24,
+        gun,
+        CG,
+        0.15,
+        0,
+        Y0,
+      ),
+    );
+    // muzzle brake
+    root.add(
+      TB(
+        [
+          [0.011, 0.53],
+          [0.017, 0.53],
+          [0.0175, 0.545],
+          [0.0175, 0.555],
+          [0.016, 0.562],
+          [0.011, 0.562],
+        ],
+        20,
+        steel,
+        ST,
+        2,
+        0,
+        Y0,
+      ),
+    );
+    // gas block
+    root.add(RB(0.024, 0.02, 0.03, 0.002, 0, Y0, -0.11, steel, ST, 2));
+    // handguard (octagonal extrusion) + M-LOK slots
+    root.add(
+      o(
+        qo(
+          [
+            [-0.024, -0.018],
+            [0.024, -0.018],
+            [0.027, -0.004],
+            [0.024, 0.014],
+            [-0.024, 0.014],
+            [-0.027, -0.004],
+          ],
+          0.08,
+          0.35,
+          0.003,
+          [0.55, 0.55, 0.58],
+          0.2,
+        ),
+        dark,
+      ),
+    );
+    for (let zz = -0.3; zz <= -0.13; zz += 0.06)
+      root.add(RB(0.004, 0.011, 0.04, 0.001, 0.0275, 0.0, zz, dark, [0.2, 0.2, 0.22], 0)),
+        root.add(RB(0.004, 0.011, 0.04, 0.001, -0.0275, 0.0, zz, dark, [0.2, 0.2, 0.22], 0));
+    // receiver (side-profile extrusion with barrel socket bump)
+    root.add(
+      o(
+        xr(
+          [
+            [-0.13, -0.026],
+            [-0.13, 0.012],
+            [0.02, 0.012],
+            [0.05, 0.02],
+            [0.05, 0.028],
+            [0.05, 0.012],
+            [0.05, -0.024],
+            [0.02, -0.034],
+            [-0.02, -0.034],
+            [-0.03, -0.05],
+            [-0.11, -0.05],
+            [-0.13, -0.026],
+          ],
+          -0.02,
+          0.02,
+          0.003,
+          [0.8, 0.8, 0.85],
+          2,
+        ),
+        poly,
+      ),
+    );
+    // ejection port
+    root.add(RB(0.003, 0.014, 0.05, 0.001, 0.0208, 0.002, -0.01, dark, [0.2, 0.2, 0.22], 0));
+    // top picatinny rail
+    root.add(RB(0.022, 0.004, 0.15, 0.001, 0, 0.0185, 0.055, steel, ST, 2));
+    for (let za = 0.12; za >= -0.015; za -= 0.0096) root.add(railTooth(za, 0.0205, steel, ST, 2));
+    // scope (lathe body + lenses + rings + turrets)
+    root.add(
+      o(
+        Cn(
+          [
+            [0.016, -0.115],
+            [0.02, -0.115],
+            [0.02, -0.085],
+            [0.016, -0.08],
+            [0.016, 0.08],
+            [0.024, 0.08],
+            [0.024, 0.115],
+            [0.016, 0.115],
+          ],
+          24,
+          ST,
+          2,
+          0,
+          0.075,
+        ),
+        steel,
+      ),
+    );
+    let objLens = o(new Ys(0.023, 0.023, 0.004, 20), glass);
+    (objLens.rotation.x = Math.PI / 2), objLens.position.set(0, 0.075, -0.116), root.add(objLens);
+    let ocuLens = o(new Ys(0.019, 0.019, 0.004, 20), glass);
+    (ocuLens.rotation.x = Math.PI / 2), ocuLens.position.set(0, 0.075, 0.116), root.add(ocuLens);
+    for (let [za, rz] of [[0.05, -0.05], [-0.01, 0.01]])
+      root.add(o(Cn([[0.0165, -rz - 0.006], [0.03, -rz - 0.006], [0.03, -rz + 0.006], [0.0165, -rz + 0.006]], 20, ST, 2, 0, 0.05), steel));
+    root.add(RB(0.012, 0.016, 0.012, 0.004, 0, 0.097, 0.0, steel, ST, 2));
+    root.add(RB(0.016, 0.012, 0.012, 0.004, 0.026, 0.075, -0.02, steel, ST, 2));
+    // polymer stock (integrated pistol grip + cheek riser)
+    root.add(
+      o(
+        xr(
+          [
+            [-0.52, -0.02],
+            [-0.52, 0.01],
+            [-0.44, 0.035],
+            [-0.34, 0.03],
+            [-0.26, 0.012],
+            [-0.13, 0.012],
+            [-0.13, -0.03],
+            [-0.18, -0.075],
+            [-0.215, -0.085],
+            [-0.24, -0.05],
+            [-0.28, -0.028],
+            [-0.36, -0.024],
+            [-0.52, -0.02],
+          ],
+          -0.021,
+          0.021,
+          0.004,
+          [0.55, 0.55, 0.58],
+          0.2,
+        ),
+        poly,
+      ),
+    );
+    // rubber butt pad + cheek riser
+    root.add(
+      o(
+        xr(
+          [
+            [-0.52, 0.01],
+            [-0.52, -0.02],
+            [-0.535, -0.02],
+            [-0.535, 0.01],
+          ],
+          -0.022,
+          0.022,
+          0.001,
+          [0.85, 0.85, 0.9],
+          0.1,
+        ),
+        rubber,
+      ),
+    );
+    root.add(RB(0.02, 0.02, 0.07, 0.006, 0, 0.045, 0.41, rubber, [0.7, 0.7, 0.75], 0));
+    // magazine (body + floor plate)
+    let mag = new wt();
+    mag.add(RB(0.03, 0.09, 0.05, 0.004, 0, -0.02, 0.01, poly, [0.5, 0.5, 0.54], 0));
+    mag.add(RB(0.032, 0.008, 0.054, 0.002, 0, -0.065, 0.01, dark, [0.3, 0.3, 0.34], 0));
+    root.add(mag);
+    // bolt (group, geometry baked at rest; position.z overwritten per-frame)
+    let bolt = new wt();
+    bolt.add(RB(0.028, 0.01, 0.01, 0.003, 0.032, 0.014, 0.0, steel, ST, 2));
+    let boltKnob = o(new ls(0.006, 10, 10), steel);
+    boltKnob.position.set(0.048, 0.014, 0.0), bolt.add(boltKnob);
+    root.add(bolt);
+    // trigger guard + trigger
+    root.add(
+      o(
+        sm(
+          Fn(
+            [
+              [-0.02, -0.05, 0.06],
+              [0.0, -0.062, 0.06],
+              [0.02, -0.055, 0.06],
+              [0.03, -0.04, 0.06],
+            ],
+            0.0026,
+            10,
+            true,
+          ),
+          ST,
+          0,
+        ),
+        steel,
+      ),
+    );
+    root.add(RB(0.006, 0.015, 0.004, 0.001, 0, -0.045, 0.06, steel, ST, 0, [0.2, 0, 0]));
+    // muzzle flash
+    let flash = N_();
+    (flash.position.fromArray([0, Y0, -0.6]), (flash.visible = !1), root.add(flash));
+    // hands (trigger hand on grip, support hand on handguard)
+    let gp = new gi(0, -0.075, 0.2),
+      lh = cloneHand(A, gp.clone().sub(new gi(0.006, -0.031, -0.085).applyQuaternion(b)));
+    lh.quaternion.copy(b), root.add(lh);
+    let pac9Forend = new gi(-0.015, -0.062, -0.236),
+      fp = new gi(0, -0.03, -0.22),
+      rh = cloneHand(q, G.p.clone().add(fp).sub(pac9Forend));
+    rh.quaternion.copy(G.q), root.add(rh);
+    let rhRest = rh.position.clone(),
+      rhQ = rh.quaternion.clone(),
+      magRest = new gi(0, 0, 0),
+      magGrip = new gi(0, -0.05, 0),
+      H_REST = { p: rhRest.clone(), q: rhQ.clone() },
+      H_NEAR = { p: rhRest.clone().add(new gi(0, -0.05, 0.03)), q: rhQ.clone() },
+      H_MAG = { p: magGrip.clone(), q: C.clone() },
+      H_OUT = { p: new gi(0, -0.26, 0.08), q: C.clone().multiply(i0(-0.35, 0, 0.2)) },
+      H_TAP = { p: new gi(0, -0.06, 0), q: C.clone() },
+      H_RACK = { p: new gi(0.05, 0.02, 0), q: X.clone() },
+      H_RACKB = { p: new gi(0.05, 0.02, 0.055), q: X.clone() },
+      rifleTact = [
+        [0, H_REST],
+        [0.1, H_REST],
+        [0.36, H_NEAR],
+        [0.44, H_MAG],
+        [0.5, H_MAG],
+        [0.8, H_OUT],
+        [0.98, H_OUT],
+        [1.28, H_MAG],
+        [1.35, H_MAG],
+        [1.45, H_TAP],
+        [1.52, H_TAP],
+        [1.62, H_MAG],
+        [1.7, H_NEAR],
+        [2.02, H_REST],
+        [9, H_REST],
+      ],
+      rifleEmpty = [
+        ...rifleTact.slice(0, 12),
+        [1.7, H_NEAR],
+        [1.96, H_RACK],
+        [2.02, H_RACK],
+        [2.14, H_RACKB],
+        [2.19, H_RACKB],
+        [2.26, H_RACK],
+        [2.36, H_RACK],
+        [2.66, H_REST],
+        [9, H_REST],
+      ],
+      Rin = C.clone().invert();
+    let finger = bindFinger(lh, m.index[0], m.index[1]);
+    root.traverse((x) => x.layers.set(zc));
+    return {
+      id: "rifle",
+      root,
+      flash,
+      bolt,
+      boltTravel: 0.055,
+      mag,
+      muzzle: [0, Y0, -0.6],
+      eject: [0.022, 0.012, -0.05],
+      finger,
+      reloadVisual(Pt, Je) {
+        le(Je.empty ? rifleEmpty : rifleTact, Pt);
+        rh.position.copy(Y);
+        rh.quaternion.copy(L);
+        Pt >= me && Pt < ee
+          ? (Z.copy(L).multiply(Rin),
+            mag.quaternion.copy(Z),
+            mag.position.copy(magRest).sub(magGrip).applyQuaternion(Z).add(Y))
+          : (mag.quaternion.identity(), mag.position.copy(magRest));
+      },
+      reloadDone() {
+        mag.quaternion.identity();
+        mag.position.copy(magRest);
+        rh.position.copy(rhRest);
+        rh.quaternion.copy(rhQ);
+      },
+      resetVisual() {
+        (mag.visible = !0),
+          mag.quaternion.identity(),
+          mag.position.copy(magRest),
+          (bolt.position.z = 0),
+          rh.position.copy(rhRest),
+          rh.quaternion.copy(rhQ);
+      },
+    };
+  }
+  function setActiveView(id) {
+    let view = VIEWS[id];
+    if (!view || view === ACT) return;
+    let prev = ACT,
+      host = prev && prev.root.parent ? prev.root.parent : i.camera;
+    prev && prev.root.parent && prev.root.parent.remove(prev.root);
+    ACT = view;
+    ve.root = ACT.root;
+    ACT.root.visible = vmVisible;
+    host.add(ACT.root);
+  }
+  VIEWS.pac9 = ACT;
+  VIEWS.shotgun = buildShotgun();
+  VIEWS.rifle = buildRifle();
+  window.__weaponView = (Me) => VIEWS[Me] && setActiveView(Me);
   e.traverse((Me) => {
     Me.layers.set(zc);
   }),
@@ -10267,6 +11067,7 @@ async function dm(i) {
       dryDone: !1,
       autoReload: -1,
       reload: null,
+      equip: null,
       burst: 0,
       lastShot: -9,
       bloom: 0,
@@ -10312,13 +11113,16 @@ async function dm(i) {
       spread: 0.0125,
       damage: H_,
       rpm: O_,
-      root: e,
+      mode: "auto",
+      pellets: 1,
+      spreadBase: 0.0125,
+      root: ACT.root,
       debug: ce,
       info: { tris: Math.round(I), meshes: se },
       update: Xe,
-      reset: _e,
+      reset: resetLoadout,
       setVisible(Me) {
-        e.visible = !!Me;
+        (vmVisible = !!Me), (ACT.root.visible = vmVisible);
       },
       muzzleWorld: Re,
       reloadNow: Fe,
@@ -10334,6 +11138,16 @@ async function dm(i) {
           (k[Me].x = 0), (k[Me].v = 0);
         k.sprintT = i.player.sprinting ? 1 : 0;
       },
+      nextWeapon() {
+        cycleWeapon(1);
+      },
+      prevWeapon() {
+        cycleWeapon(-1);
+      },
+      equip(slot) {
+        return equipWeapon(slot);
+      },
+      currentId,
     };
   function _e() {
     (ve.ammo = Gv),
@@ -10346,6 +11160,7 @@ async function dm(i) {
         dryDone: !1,
         autoReload: -1,
         reload: null,
+        equip: null,
         burst: 0,
         lastShot: -9,
         bloom: 0,
@@ -10363,25 +11178,171 @@ async function dm(i) {
       });
     for (let Me of ["kZ", "kP", "kY", "kR", "swY", "swP", "jY", "jP", "bump"])
       (k[Me].x = 0), (k[Me].v = 0);
-    (d.visible = !0),
-      (f.visible = !0),
-      f.position.copy(p),
-      f.quaternion.identity(),
-      q.position.copy(G.p),
-      q.quaternion.copy(G.q);
+    (ce.noFire = !1), ACT.resetVisual();
   }
+  function applyStats(id) {
+    let def = WEAPON_DEFS[id];
+    if (!def) return;
+    (Gv = def.magSize),
+      (B_ = def.reserve),
+      (O_ = def.rpm),
+      (H_ = def.damage),
+      (V_ = def.range),
+      (W_ = def.reloadTactical),
+      (G_ = def.reloadEmpty);
+  }
+  function saveCurrent() {
+    let id = loadoutState.owned[loadoutState.current];
+    if (!id) return;
+    loadoutState.pool[id] = { mag: ve.ammo, reserve: ve.reserve };
+  }
+  function resetLoadout() {
+    loadoutState.owned = ["pac9"];
+    loadoutState.current = 0;
+    loadoutState.pool = {
+      pac9: { mag: WEAPON_DEFS.pac9.magSize, reserve: WEAPON_DEFS.pac9.reserve },
+      shotgun: { mag: WEAPON_DEFS.shotgun.magSize, reserve: 0 },
+      rifle: { mag: WEAPON_DEFS.rifle.magSize, reserve: 0 },
+    };
+    loadoutState.droppedFirst = {};
+    for (let pk of loadoutState.pickups) pk.mesh && i.scene.remove(pk.mesh);
+    loadoutState.pickups.length = 0;
+    applyStats("pac9");
+    setActiveView("pac9");
+    _e();
+    (ve.name = WEAPON_DEFS.pac9.name),
+      (ve.mode = "auto"),
+      (ve.pellets = 1),
+      (ve.spreadBase = WEAPON_DEFS.pac9.spreadBase),
+      (ve.magSize = Gv),
+      (ve.damage = H_),
+      (ve.rpm = O_),
+      (ve.spread = WEAPON_DEFS.pac9.spreadBase);
+  }
+  function equipWeapon(slot) {
+    let id = loadoutState.owned[slot],
+      from = loadoutState.owned[loadoutState.current];
+    if (!id || slot === loadoutState.current || !from || k.equip) return !1;
+    saveCurrent();
+    loadoutState.current = slot;
+    applyStats(id);
+    _e();
+    let pool = loadoutState.pool[id] || { mag: WEAPON_DEFS[id].magSize, reserve: 0 };
+    (ve.ammo = pool.mag),
+      (ve.reserve = pool.reserve),
+      (ve.name = WEAPON_DEFS[id].name),
+      (ve.magSize = Gv),
+      (ve.damage = H_),
+      (ve.rpm = O_),
+      (ve.mode = WEAPON_DEFS[id].mode),
+      (ve.pellets = WEAPON_DEFS[id].pellets),
+      (ve.spreadBase = WEAPON_DEFS[id].spreadBase);
+    i.events.emit("weapon:switch", { from: from, to: id });
+    (k.equip = { target: id, t: 0, phase: "holster" }), (ce.noFire = !0);
+    return !0;
+  }
+  function cycleWeapon(dir) {
+    if (loadoutState.owned.length < 2) return;
+    equipWeapon((loadoutState.current + dir + loadoutState.owned.length) % loadoutState.owned.length);
+  }
+  function currentId() {
+    return loadoutState.owned[loadoutState.current] || "pac9";
+  }
+  function grantAmmo(weaponId, amount) {
+    let def = WEAPON_DEFS[weaponId];
+    if (!def) return;
+    let pool = loadoutState.pool[weaponId];
+    if (!pool) pool = loadoutState.pool[weaponId] = { mag: def.magSize, reserve: 0 };
+    let cap = def.magSize * 3;
+    pool.reserve = Math.min(cap, pool.reserve + amount);
+    if (loadoutState.owned[loadoutState.current] === weaponId) ve.reserve = pool.reserve;
+  }
+  function pickupWeapon(weaponId, ammo, kind) {
+    let def = WEAPON_DEFS[weaponId];
+    if (!def) return;
+    let ownedIdx = loadoutState.owned.indexOf(weaponId);
+    if (ownedIdx >= 0) {
+      grantAmmo(weaponId, ammo);
+      i.events.emit("weapon:pickup", { kind: kind === "ammo" ? "ammo" : weaponId, weapon: weaponId });
+      return;
+    }
+    if (loadoutState.owned.length < 2) {
+      loadoutState.owned.push(weaponId);
+      loadoutState.pool[weaponId] = { mag: def.magSize, reserve: ammo };
+      equipWeapon(loadoutState.owned.length - 1);
+    } else {
+      loadoutState.owned[1] = weaponId;
+      loadoutState.pool[weaponId] = { mag: def.magSize, reserve: ammo };
+      equipWeapon(1);
+    }
+    i.events.emit("weapon:pickup", { kind: weaponId, weapon: weaponId });
+  }
+  function spawnPickup(weaponId, ammo, pos, kind) {
+    let mesh = null;
+    try {
+      let color = kind === "ammo" ? 0xffee66 : weaponId === "shotgun" ? 0xffaa33 : 0x55ccff,
+        geo = kind === "ammo" ? new un(0.34, 0.2, 0.34) : new Na(0.36, 0),
+        mat = i.mats && i.mats.emissive ? i.mats.emissive(color, 2.6) : new Nn({ color: new Ve(color) });
+      mesh = new Qe(geo, mat);
+      mesh.position.set(pos.x, pos.y + 0.85, pos.z);
+      (mesh.castShadow = !1), (mesh.receiveShadow = !1), (mesh.frustumCulled = !1);
+      mesh.userData.weaponPickup = weaponId;
+      i.scene.add(mesh);
+    } catch (err) {
+      console.warn("[weapon] spawnPickup failed: " + (err && err.message));
+    }
+    loadoutState.pickups.push({ mesh, weaponId, kind, ammo, pos: { x: pos.x, y: pos.y, z: pos.z }, t: 0 });
+  }
+  function rollDrop(type, pos) {
+    let weaponId = DROP_TABLE[type];
+    if (!weaponId || !pos) return;
+    let first = !loadoutState.droppedFirst[type];
+    loadoutState.droppedFirst[type] = !0;
+    if (!first && i.rng() > 0.4) return;
+    let def = WEAPON_DEFS[weaponId],
+      owned = loadoutState.owned.indexOf(weaponId) >= 0;
+    if (owned) {
+      spawnPickup(weaponId, def.magSize * 2, pos, "ammo");
+      i.events.emit("weapon:drop", { kind: type, pos: pos, weapon: weaponId, ammo: !0 });
+    } else {
+      let ammo = weaponId === "shotgun" ? 12 : weaponId === "rifle" ? 20 : def.magSize;
+      spawnPickup(weaponId, ammo, pos, "weapon");
+      i.events.emit("weapon:drop", { kind: type, pos: pos, weapon: weaponId });
+    }
+  }
+  function updatePickups(dt) {
+    let p = i.player;
+    if (!p || !p.alive) return;
+    for (let j = loadoutState.pickups.length - 1; j >= 0; j--) {
+      let pk = loadoutState.pickups[j];
+      if (pk.mesh) {
+        pk.t += dt;
+        pk.mesh.rotation.y += dt * 2.4;
+        pk.mesh.position.y = pk.pos.y + 0.85 + Math.sin(pk.t * 2.2) * 0.12;
+      }
+      if (Math.hypot(pk.pos.x - p.pos.x, pk.pos.z - p.pos.z) < 2 && Math.abs(pk.pos.y - p.pos.y) < 3) {
+        pickupWeapon(pk.weaponId, pk.ammo, pk.kind);
+        pk.mesh && i.scene.remove(pk.mesh);
+        loadoutState.pickups.splice(j, 1);
+      }
+    }
+  }
+  i.events.on("enemy:killed", (k) => {
+    if (!k) return;
+    rollDrop(k.type || (k.enemy && k.enemy.type), k.pos || (k.enemy && k.enemy.pos));
+  });
   let Te = new Ye();
   function Pe(Me, we) {
-    e.updateMatrix(), we.fromArray(Me).applyMatrix4(e.matrix);
+    ACT.root.updateMatrix(), we.fromArray(Me).applyMatrix4(ACT.root.matrix);
     let be = i.camera,
       Oe = Math.tan((be.fov * Math.PI) / 360) / Math.tan((i.viewCamera.fov * Math.PI) / 360);
     return (we.x *= Oe), (we.y *= Oe), we.applyQuaternion(be.quaternion).add(be.position);
   }
   function Re(Me = new gi()) {
-    return Pe(mi.muzzle, Me);
+    return Pe(ACT.muzzle, Me);
   }
   function Fe() {
-    if (k.reload || ve.ammo >= ve.magSize || ve.reserve <= 0) return !1;
+    if (k.reload || k.equip || ve.ammo >= ve.magSize || ve.reserve <= 0) return !1;
     let Me = ve.ammo <= 0;
     return (
       (k.reload = { t: 0, T: Me ? G_ : W_, empty: Me, f: {} }),
@@ -10409,15 +11370,28 @@ async function dm(i) {
       .applyQuaternion(we.quaternion),
       Ie.copy(Me.eye || we.position);
     let ut = null;
-    try {
-      ut = i.combat.playerShot(Ie, ze, { damage: H_, range: V_ });
-    } catch {}
+    if ((ve.pellets || 1) <= 1) {
+      try {
+        ut = i.combat.playerShot(Ie, ze, { damage: H_, range: V_ });
+      } catch {}
+    } else
+      for (let pe = 0; pe < ve.pellets; pe++) {
+        let be2 = ae() * Math.PI * 2,
+          pt2 = Math.tan(ve.spread) * Math.sqrt(ae());
+        dt
+          .set(Math.cos(be2) * pt2, Math.sin(be2) * pt2, -1)
+          .normalize()
+          .applyQuaternion(we.quaternion);
+        try {
+          ut = i.combat.playerShot(Ie, dt, { damage: H_, range: V_ }) || ut;
+        } catch {}
+      }
     ut && ut.point ? Ne.copy(ut.point) : Ne.copy(Ie).addScaledVector(ze, V_), Re(We);
     let nn = i.fx;
     nn &&
       (nn.tracer && nn.tracer(We, Ne),
       nn.shell &&
-        (Pe(mi.eject, dt),
+        (Pe(ACT.eject, dt),
         xe.set(2 + ae() * 1.2, 1.2 + ae() * 0.8, 0.5 - ae() * 0.6).applyQuaternion(we.quaternion),
         Me.vel && xe.add(Me.vel),
         nn.shell(dt, xe))),
@@ -10438,27 +11412,45 @@ async function dm(i) {
       (k.kR.v += (ae() - 0.5) * 1.8 * bt),
       (k.bloom = Math.min(1, k.bloom + 0.17)),
       (k.flashT = k.flashDur = 0.036 + ae() * 0.02);
-    let ho = x.material.uniforms;
+    let ho = ACT.flash.material.uniforms;
     (ho.uSeed.value = ae() * 100),
       (ho.uJet.value = 0.6 + ae() * 0.6),
-      (x.rotation.z = (ae() - 0.5) * 0.4);
+      (ACT.flash.rotation.z = (ae() - 0.5) * 0.4);
     let Rs = (0.8 + ae() * 0.5) * bi(1, 0.62, k.adsE);
-    x.scale.set(Rs, Rs, Rs * (0.8 + ae() * 0.5)),
+    ACT.flash.scale.set(Rs, Rs, Rs * (0.8 + ae() * 0.5)),
       (k.boltT = 0),
-      ve.ammo <= 0 && ((k.boltLocked = !0), (d.visible = !1));
+      ve.ammo <= 0 && ((k.boltLocked = !0), ACT.mag && (ACT.mag.visible = !1));
   }
   function Xe(Me) {
     let we = i.player,
       be = i.input;
     if (!we || !be || !we.alive) {
-      (k.prevFire = !1), x && (x.visible = !1);
+      (k.prevFire = !1), ACT.flash && (ACT.flash.visible = !1);
+      (k.equip = null), (ce.noFire = !1);
       return;
     }
     k.t += Me;
-    let Oe = !!be.fire && e.visible && !ce.noFire,
+    updatePickups(Me);
+    let eqO = 0;
+    if (k.equip) {
+      let Eq = k.equip;
+      (Eq.t += Me);
+      if (Eq.phase === "holster") {
+        eqO = Yo(Math.min(1, Eq.t / 0.22));
+        if (Eq.t >= 0.22) (setActiveView(Eq.target), (Eq.phase = "draw"), (Eq.t = 0), (k.bump.v -= 0.6));
+      } else {
+        eqO = 1 - Yo(Math.min(1, Eq.t / 0.35));
+        if (Eq.t >= 0.35) (k.equip = null), (ce.noFire = !1);
+      }
+    }
+    if (be.pressed) {
+      if (be.pressed("wep1")) equipWeapon(0);
+      else if (be.pressed("wep2")) equipWeapon(1);
+    }
+    let Oe = !!be.fire && ACT.root.visible && !ce.noFire && !k.equip,
       pt = Oe && !k.prevFire;
     (k.prevFire = Oe), Oe || (k.dryDone = !1);
-    let ut = !!we.sprinting && !Oe && !be.ads && !k.reload;
+    let ut = !!we.sprinting && !Oe && !be.ads && !k.reload && !k.equip;
     (k.sprintT = kn(k.sprintT, ut ? 1 : 0, 9, Me)),
       be.pressed && be.pressed("reload") && Fe(),
       k.autoReload >= 0 && ((k.autoReload -= Me), k.autoReload < 0 && Fe());
@@ -10478,7 +11470,7 @@ async function dm(i) {
             : !1;
       if (
         (Vt("magout", me) && (k.bump.v -= 0.25),
-        Pt > 0.86 && !Je.f.fresh && ((Je.f.fresh = 1), (d.visible = !0)),
+        Pt > 0.86 && !Je.f.fresh && ((Je.f.fresh = 1), ACT.mag && (ACT.mag.visible = !0)),
         Vt("magin", ee))
       ) {
         k.bump.v += 0.55;
@@ -10491,14 +11483,7 @@ async function dm(i) {
             (nn =
               Pt < P ? Yo((Pt - B) / (P - B)) : Pt < V ? 1 : Math.max(0, 1 - (Pt - V) / 0.035)),
           Vt("bolt", V) && ((k.boltLocked = !1), (k.bump.v += 0.3), (k.kZ.v -= 0.5))),
-        le(Je.empty ? ue : $, Pt),
-        q.position.copy(Y),
-        q.quaternion.copy(L),
-        Pt >= me && Pt < ee
-          ? (Z.copy(L).multiply(R),
-            f.quaternion.copy(Z),
-            f.position.copy(p).sub(j.p).applyQuaternion(Z).add(Y))
-          : (f.quaternion.identity(), f.position.copy(p));
+        ACT.reloadVisual(Pt, Je);
       let ss = Yo(Pt / 0.3),
         Hs = 1 - Yo((Pt - (Je.T - 0.46)) / 0.4);
       (k.reloadW = Math.min(ss, Hs)),
@@ -10509,17 +11494,20 @@ async function dm(i) {
           (k.reloadW = 0),
           (k.rackW = 0),
           i.events.emit("weapon:reload", { phase: "done" }),
-          q.position.copy(G.p),
-          q.quaternion.copy(G.q));
+          ACT.reloadDone());
     }
     k.cooldown -= Me;
-    let bt = !k.reload && k.sprintT < 0.45;
+    let bt = !k.reload && k.sprintT < 0.45,
+      semi = ve.mode === "semi" || ve.mode === "pump",
+      trigger = semi ? pt : Oe,
+      burstCap = semi ? 1 : 3;
     if (Oe && bt)
-      if (ve.ammo > 0) {
+      if (trigger && ve.ammo > 0) {
         let Je = 0;
-        for (; k.cooldown <= 0 && ve.ammo > 0 && Je < 3; ) Be(), (k.cooldown += 60 / O_), Je++;
+        for (; k.cooldown <= 0 && ve.ammo > 0 && Je < burstCap; ) Be(), (k.cooldown += 60 / O_), Je++;
       } else
-        k.dryDone ||
+        trigger &&
+          !k.dryDone &&
           ((k.dryDone = !0),
           i.events.emit("weapon:dry", {}),
           (k.bump.v -= 0.08),
@@ -10547,14 +11535,14 @@ async function dm(i) {
             alpha: 0.22,
           }))),
       (k.heat = Math.max(0, k.heat - Me * 0.2));
-    let Os = !!be.ads && !k.reload && k.sprintT < 0.35;
+    let Os = !!be.ads && !k.reload && k.sprintT < 0.35 && !k.equip;
     (k.adsLin = Zn(k.adsLin + (Os ? Me : -Me) / 0.18, 0, 1)),
       (k.adsE = Yo(k.adsLin)),
       (ve.ads = k.adsE);
     let pn = we.speed || 0,
       Ti = Fo(pn / 6),
       ho =
-        bi(0.0125, 0.0012, k.adsE) +
+        bi(ve.spreadBase || 0.0125, (ve.spreadBase || 0.0125) * 0.096, k.adsE) +
         Ti * bi(0.013, 0.004, k.adsE) +
         k.bloom * bi(0.0065, 0.0022, k.adsE) +
         (we.onGround === !1 ? 0.022 : 0) -
@@ -10593,16 +11581,16 @@ async function dm(i) {
     let ya = 0.072,
       ba = k.boltT < ya ? Math.sin((Math.PI * k.boltT) / ya) : 0;
     k.boltLocked && k.boltT > ya * 0.5 && (ba = Math.max(ba, 0.86)),
-      (h.position.z = mi.boltTravel * Math.max(ba * 0.95, nn)),
+      ACT.bolt && (ACT.bolt.position.z = ACT.boltTravel * Math.max(ba * 0.95, nn)),
       (k.finger = kn(k.finger, (Oe && bt) || ce.flash ? 1 : 0, 30, Me)),
-      z(k.finger);
-    let Hn = x.material.uniforms;
+      ACT.finger && ACT.finger(k.finger);
+    let Hn = ACT.flash.material.uniforms;
     if (
       (ce.flash && ((k.flashT = k.flashDur = 0.05), (Hn.uSeed.value = 3.7)),
       (k.flashT -= Me),
       (Hn.uInt.value = k.flashT > 0 ? 9.5 * Math.sqrt(Math.max(0, k.flashT / k.flashDur)) : 0),
       (Hn.uHeat.value = Fo((k.heat - 0.45) / 0.8) * 2.2),
-      (x.visible = Hn.uInt.value > 0 || Hn.uHeat.value > 0.02),
+      (ACT.flash.visible = Hn.uInt.value > 0 || Hn.uHeat.value > 0.02),
       ce.freeze)
     )
       return;
@@ -10707,7 +11695,7 @@ async function dm(i) {
         0.75 * Un +
         0.55 * zo +
         Math.sin(he * 0.5) * 0.004 * te;
-    e.position.set(it, gt, Ot), e.rotation.set(xn, $t, Ht, "YXZ");
+    ACT.root.position.set(it, gt - 0.22 * eqO, Ot + 0.15 * eqO), ACT.root.rotation.set(xn - 0.5 * eqO, $t - 0.3 * eqO, Ht + 0.1 * eqO, "YXZ");
   }
   return _e(), ve;
 }
@@ -11649,6 +12637,7 @@ var Yi = {
     retryIntroSeconds: 1.3,
     interactRange: 2.2,
     interactFacing: 0.45,
+    infiltrateRange: 16,
     cutSeconds: 2.4,
     patrol: { gull: 2, hound: 1 },
     waves: [
@@ -11668,6 +12657,7 @@ var Yi = {
   jC = ["北方", "东北方", "东方", "东南方", "南方", "西南方", "西方", "西北方"],
   _l = {
     intro: "玄鲸队员，这里是指挥中心。港区主控已封锁泊位。切断堆场、仓库、码头的三处中继。",
+    infiltrated: "已进入中继区。切断三处上行中继，注意机械守卫巡逻。",
     contact: "你已被发现！空中有机械飞鸥，地面有机械猎犬。消灭它们。",
     cut: [
       "第一处中继已断开。敌方已察觉，机械守卫正在赶来。",
@@ -11715,6 +12705,7 @@ function mM(i) {
       relays: [],
       cut: 0,
       allCut: !1,
+      stage: "infiltrate",
       queue: [],
       waveHot: 0,
       alertT: 0,
@@ -11827,6 +12818,7 @@ function mM(i) {
       (c.time = 0),
       (c.cut = 0),
       (c.allCut = !1),
+      (c.stage = "infiltrate"),
       (c.queue.length = 0),
       (c.waveHot = 0),
       (c.alertT = 0),
@@ -11917,6 +12909,7 @@ function mM(i) {
   }
   function D() {
     if (c.allCut) return "前往撤离艇";
+    if (c.stage === "infiltrate") return "潜入港区，接近中继区";
     let P = c.relays.length - c.cut;
     return c.cut === 0
       ? "切断三处上行中继"
@@ -12133,6 +13126,16 @@ function mM(i) {
   }
   function ue(P) {
     let V = n.alive ? $() : null;
+    if (c.stage === "infiltrate" && n.alive) {
+      let near = null;
+      for (let L of c.relays) {
+        if (!L.cut && Math.hypot(L.o.pos.x - n.pos.x, L.o.pos.z - n.pos.z) < Yi.infiltrateRange) {
+          near = L;
+          break;
+        }
+      }
+      near && ((c.stage = "cut"), o.setObjective(D()), o.radio && o.radio(_l.infiltrated, 3.2));
+    }
     for (let L of c.relays)
       L.cut ||
         (L === V && r.down("interact")
@@ -12172,6 +13175,7 @@ function mM(i) {
       F(c.cut - 1),
       c.cut >= V
         ? ((c.allCut = !0),
+          (c.stage = "extract"),
           (c.pursuitLeft = Yi.pursuitExtra),
           (c.pursuitT = 12),
           i.events.emit("objective:all", {}),
@@ -12650,6 +13654,8 @@ function tP() {
     endFrame: i,
     requestLock: i,
     exitLock: i,
+    nextWeapon: i,
+    prevWeapon: i,
   };
 }
 function nP(i) {
