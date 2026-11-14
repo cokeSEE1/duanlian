@@ -22,12 +22,12 @@
  */
 
 /**
- * 武器定义（对齐 game 模块 WEAPON_DEFS 真实字段，D 路三武器 pac9/shotgun/rifle）。
+ * 武器定义（对齐 game 模块 WEAPON_DEFS 真实字段，D 路五武器 pac9/shotgun/rifle/gatling/rocket）。
  * @typedef {object} WeaponRecord
- * @property {string} id              武器 id（pac9 / shotgun / rifle）
+ * @property {string} id              武器 id（pac9 / shotgun / rifle / gatling / rocket）
  * @property {string} name            显示名
  * @property {'auto'|'pump'|'semi'} mode  射击模式（auto 自动 / pump 泵动 / semi 半自动）
- * @property {number} damage          单颗弹丸伤害（霰弹枪按每颗计，×pellets）
+ * @property {number} damage          单颗弹丸伤害（霰弹枪按每颗计，×pellets；rocket 为 AOE 中心伤害）
  * @property {number} rpm             射速（发/分）
  * @property {number} magSize         弹匣容量
  * @property {number} reserve         备用弹药
@@ -36,6 +36,10 @@
  * @property {number} pellets         单次击发弹丸数（霰弹枪 8，其余 1）
  * @property {number} reloadTactical  战术换弹时长（秒）
  * @property {number} reloadEmpty     空仓换弹时长（秒）
+ * @property {boolean} [spinUp]       转管起转（gatling，开火前 ~0.3s 散布放大）
+ * @property {number} [radius]        AOE 爆炸半径（rocket）
+ * @property {number} [speed]         弹体速度 m/s（rocket）
+ * @property {boolean} [projectile]   走弹道非 hitscan（rocket，true 时走 combat.spawnProjectile）
  */
 
 /**

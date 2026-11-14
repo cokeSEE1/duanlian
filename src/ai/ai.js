@@ -2233,6 +2233,635 @@ function nM(i, e, t, n, s, o, r) {
     (f = f < 0 ? 0 : f > 1 ? 1 : f), tM.copy(t).addScaledVector(au, f), sM(i, e, tM, s, o, r)
   );
 }
+var sD = {
+    stand: 2.45,
+    L1: 1.36,
+    L2: 1.43,
+    l0: 0.26,
+    hipX: 0.56,
+    hipY: -0.03,
+    hipZ: 1.36,
+    footX: 0.94,
+    footZ: [1.26, 1.26, -1.43, -1.43],
+    legs: ["FL", "FR", "RL", "RR"],
+    side: [1, -1, 1, -1],
+    fore: [1, 1, -1, -1],
+    footR: 0.16,
+    stride: 0.55,
+    lift: 0.34,
+    bodyR: 1.15,
+    coreR: 0.62,
+    headR: 0.55,
+  },
+  sN = {
+    hp: 2400,
+    maxSpeed: 6.5,
+    p2Speed: 9,
+    p3Speed: 4.2,
+    turnRate: 2.2,
+    keepDist: [8, 6, 10],
+    engageRange: 60,
+    chargeSpeed: 16,
+    p2ChargeSpeed: 22,
+    chargeTele: 0.8,
+    chargeTime: 1.1,
+    chargeDamage: 28,
+    chargeMin: 11,
+    fanShots: 9,
+    fanAngle: 2.1,
+    fanDamage: 8,
+    waveDamage: 16,
+    waveSpeed: 9,
+    waveRadius: 2.2,
+    missileCount: 5,
+    missileSpeed: 15,
+    missileDamage: 22,
+    missileRadius: 3,
+    missileLife: 6,
+    missileCooldown: 6,
+    summonCount: 3,
+    summonCooldown: 9,
+    aoeRadius: 8,
+    aoeDamage: 30,
+    aoeCharge: 1.7,
+    aoeCooldown: 7,
+    aoeStun: 2.6,
+    cool: [2.4, 1.5, 0.8],
+    invuln: 1.5,
+  },
+  sQ = { abd: 0, hip: 0, knee: 0, reach: 0 },
+  sV1 = new W(),
+  sV2 = new W(),
+  sV3 = new W(),
+  sV4 = new W();
+function sZ() {
+  let i = sD,
+    e = new iu();
+  e.bone("root", null, 0, 0, 0),
+    e.bone("body", "root", 0, i.stand, 0),
+    e.bone("neck", "body", 0, 0.2, 1.66),
+    e.bone("head", "neck", 0, 0.44, 0.41),
+    e.bone("turret", "body", 0, 0.52, -0.1),
+    e.bone("gun", "turret", 0, 0.32, 0.07),
+    e.bone("antenna", "body", -0.36, 0.51, -1.56),
+    e.bone("beacon", "body", 0.36, 0.68, -1.55),
+    e.bone("core", "body", 0, 0.5, -0.35),
+    e.bone("backL", "body", -0.4, 0.55, -0.5),
+    e.bone("backR", "body", 0.4, 0.55, -0.5),
+    e.bone("podL", "body", -0.72, 0.45, 0.35),
+    e.bone("podR", "body", 0.72, 0.45, 0.35),
+    e.bone("finL", "body", -0.55, 0.4, -1.1),
+    e.bone("finR", "body", 0.55, 0.4, -1.1);
+  for (let n = 0; n < 4; n++) {
+    let s = i.legs[n],
+      o = i.side[n];
+    e.bone("abd" + s, "body", o * i.hipX, i.hipY, i.fore[n] * i.hipZ),
+      e.bone("thigh" + s, "abd" + s, o * i.l0, 0, 0),
+      e.bone("shin" + s, "thigh" + s, 0, -i.L1, 0);
+  }
+  let t = (n, s, o, r, a) => e.add(n, s, o, r, a);
+  t("metal", "body", Ce(ft(1.05, 0.6, 2.8, 0.06), 0, 0, 0), an),
+    t("shell", "body", Ce(ft(1.1, 0.3, 1.2, 0.05), 0, 0.28, 0.85), Ss),
+    t("shell", "body", Ce(ft(1.1, 0.26, 1.0, 0.05), 0, 0.32, -0.1), Ss),
+    t("shell", "body", Ce(ft(0.9, 0.5, 0.7, 0.07), 0, 0.05, 0.55), Ss);
+  for (let n of [1, -1])
+    t("shell", "body", Ce(ft(0.14, 0.5, 2.2, 0.04), n * 0.55, 0.02, 0), Ss),
+      t("metal", "body", Ce(ft(0.06, 0.2, 0.4, 0.01), n * 0.6, -0.05, 0.8), Yn);
+  t("shell", "neck", Ce(su([0, -0.05, -0.05], [0, 0.34, 0.3], 0.14, 0.11, 12), 0, 0, 0), Ss),
+    t("shell", "head", Ce(ft(0.62, 0.4, 0.8, 0.1), 0, 0, 0), Ss),
+    t("lens", "head", Ce(ft(0.4, 0.08, 0.02, 0.006), 0, 0.02, 0.42), [1, 1, 1], !1),
+    t("metal", "turret", Ce(ds(0.36, 0.4, 0.12, 18), 0, 0, 0), an),
+    t("shell", "gun", Ce(ft(0.34, 0.28, 0.7, 0.05), 0, -0.04, 0.1), Ss),
+    t("metal", "gun", Ce(Si(0.12, 0.12, 1.0, 12), 0, 0, 0.55), an),
+    t("metal", "gun", Ce(Si(0.14, 0.14, 0.12, 12), 0, 0, 1.0), Yn),
+    t("metal", "antenna", Ce(ds(0.04, 0.05, 2.0, 6), 0, 1.0, 0), an),
+    t("shell", "antenna", Ce(Ur(0.03, 8, 6), 0, 2.05, 0), Ts),
+    t("glow", "beacon", Ce(Ur(0.07, 10, 6, 1, 1.25, 1), 0, 0.04, 0), [14, 5.5, 0.5], !1),
+    t("glow", "core", Ce(ft(0.44, 0.22, 0.6, 0.04), 0, 0, 0), [10, 1.2, 0.3], !1),
+    t("metal", "core", Ce(ft(0.5, 0.26, 0.66, 0.04), 0, 0, 0), an),
+    t("lens", "core", Ce(ft(0.2, 0.12, 0.34, 0.02), 0, 0.02, 0), [1, 1, 1], !1),
+    t("shell", "backL", Ce(ft(0.52, 0.14, 1.15, 0.05), 0.1, 0, 0), Ss),
+    t("shell", "backR", Ce(ft(0.52, 0.14, 1.15, 0.05), -0.1, 0, 0), Ss),
+    t("shell", "backL", Ce(ft(0.06, 0.1, 0.9, 0.02), 0.05, -0.08, 0.05), Ts),
+    t("shell", "backR", Ce(ft(0.06, 0.1, 0.9, 0.02), -0.05, -0.08, 0.05), Ts);
+  for (let n of ["podL", "podR"])
+    t("shell", n, Ce(ft(0.44, 0.36, 0.8, 0.06), 0, 0, 0), Ss),
+      t("metal", n, Ce(ft(0.3, 0.08, 0.7, 0.02), 0, 0, 0.02), an);
+  for (let n = 0; n < 3; n++)
+    t("metal", "podL", Ce(Si(0.07, 0.07, 0.22, 10), 0.12, -0.05, -0.1 + n * 0.24), Yn),
+      t("metal", "podR", Ce(Si(0.07, 0.07, 0.22, 10), -0.12, -0.05, -0.1 + n * 0.24), Yn);
+  t("shell", "finL", Ce(ft(0.06, 0.3, 0.5, 0.02), 0, 0.2, 0), Ts),
+    t("shell", "finR", Ce(ft(0.06, 0.3, 0.5, 0.02), 0, 0.2, 0), Ts),
+    t("glow", "finL", Ce(ft(0.04, 0.26, 0.44, 0.01), 0, 0.2, 0), [14, 0.6, 0.15], !1),
+    t("glow", "finR", Ce(ft(0.04, 0.26, 0.44, 0.01), 0, 0.2, 0), [14, 0.6, 0.15], !1);
+  for (let n = 0; n < 4; n++) {
+    let s = i.legs[n],
+      o = i.side[n],
+      r = "abd" + s,
+      a = "thigh" + s,
+      l = "shin" + s;
+    t("metal", r, Ce(Si(0.2, 0.2, 0.55, 14), -o * 0.06, 0, 0), an),
+      t("shell", r, Ce(ft(0.36, 0.16, 0.5, 0.04), 0, 0.2, 0), Ss),
+      t("shell", a, Ce(Ro(0.26, 0.26, 0.24, 16), 0, 0, 0), Ss),
+      t("metal", a, Ce(ft(0.2, i.L1 - 0.1, 0.34, 0.05), 0, -i.L1 * 0.5, 0), an),
+      t("shell", a, Ce(ft(0.24, i.L1 - 0.06, 0.3, 0.04), 0, -i.L1 * 0.5, 0.02), Ss),
+      t("metal", l, Ce(ds(0.1, 0.07, i.L2 - 0.2, 10), 0, -(i.L2 - 0.2) / 2 - 0.02, 0), an),
+      t("shell", l, Ce(ft(0.18, 0.7, 0.14, 0.04), 0, -0.42, 0.06), Ss),
+      t("shell", l, Ce(Ur(i.footR + 0.01, 12, 8, 1, 0.86, 1.1), 0, -i.L2 + i.footR * 0.86, 0.02), ga);
+  }
+  return e.build(["shell", "metal", "glow", "lens"]);
+}
+function sB(i, e, t, n) {
+  let s = i.G,
+    o = i.rng,
+    r = t.lensBase.clone(),
+    a = pm(e, { shell: t.shell, metal: t.metal, glow: t.glow, lens: r }, { radius: 4.5, center: [0, sD.stand + 0.2, 0] }),
+    l = a.bones;
+  a.group.visible = !1;
+  let c = [],
+    u = [],
+    h = [];
+  for (let T = 0; T < 4; T++)
+    c.push(l["abd" + sD.legs[T]]), u.push(l["thigh" + sD.legs[T]]), h.push(l["shin" + sD.legs[T]]);
+  let b = {
+    id: 0,
+    type: "sentinel",
+    variant: "boss",
+    pos: a.group.position,
+    alive: !1,
+    hp: sN.hp,
+    maxHp: sN.hp,
+    active: !1,
+    phase: 1,
+    rig: a,
+    lens: r,
+    feet: [0, 1, 2, 3].map(() => ({ p: new W() })),
+    yaw: 0,
+    speed: 0,
+    yawRate: 0,
+    home: new W(),
+    lastKnown: new W(),
+    muzzle: new W(),
+    headPos: new W(),
+    corePos: new W(),
+    mode: "engage",
+    los: !0,
+    passive: !1,
+    hasToken: !1,
+    es: "idle",
+    esT: 0,
+    cool: 1,
+    curSpeed: 0,
+    invulnT: 0,
+    coreT: 0,
+    missileCd: 0,
+    summonCd: 0,
+    aoeCd: 0,
+    tyaw: 0,
+    tpitch: 0,
+    hyaw: 0,
+    hpitch: 0,
+    sY: 0,
+    sP: 0,
+    sR: 0,
+    crouch: 0,
+    flare: 0,
+    ph: 0,
+    lensC: [_m[0], _m[1], _m[2]],
+    smokeT: 0,
+    dieT: 0,
+    loop: null,
+    damage(T, D, C, G) {
+      if (!b.alive) return !1;
+      if (b.invulnT > 0)
+        return (
+          s.fx.sparks(D || b.pos, jv, 6),
+          s.events.emit("enemy:hit", { enemy: b, point: D, part: "armor" }),
+          !1
+        );
+      (b.hp -= T), s.events.emit("enemy:hit", { enemy: b, point: D, part: G || "body" });
+      if (C) (b.sP += G === "weak" ? 0.5 : 0.18), (b.flare = 1);
+      return i.provoke(b), b.hp <= 0 ? (q(C), !0) : !1;
+    },
+    _activate(T, D = {}) {
+      (b.active = !0),
+        (b.alive = !0),
+        (b.phase = 1),
+        (b.hp = sN.hp),
+        (b.maxHp = sN.hp),
+        b.pos.copy(T),
+        (b.pos.y = s.physics.groundHeight(T.x, T.z, T.y + 1)),
+        b.home.copy(b.pos),
+        (b.yaw = D.yaw ?? (s.player ? Math.atan2(s.player.pos.x - T.x, s.player.pos.z - T.z) : 0)),
+        (b.speed = 0),
+        (b.curSpeed = 0),
+        (b.yawRate = 0),
+        (b.es = "idle"),
+        (b.esT = 0),
+        (b.cool = 1.2),
+        (b.invulnT = 0),
+        (b.coreT = 0),
+        (b.missileCd = 2),
+        (b.summonCd = 4),
+        (b.aoeCd = sN.aoeCooldown * 0.5),
+        (b.sY = b.sP = b.sR = b.crouch = b.flare = 0),
+        (b.dieT = 0),
+        (b.smokeT = 0),
+        (b.mode = "engage"),
+        (b.passive = !1),
+        (b.hasToken = !1),
+        (b.ph = o() * 6.283),
+        b.lastKnown.copy(s.player ? s.player.pos : b.pos);
+      for (let C = 0; C < 4; C++) A(b.feet[C].p, C, b.pos.x, b.pos.z, b.yaw);
+      l.backL.scale.setScalar(1),
+        l.backR.scale.setScalar(1),
+        l.core.scale.setScalar(0.01),
+        l.finL.scale.setScalar(0.01),
+        l.finR.scale.setScalar(0.01),
+        l.neck.rotation.set(0, 0, 0),
+        l.gun.rotation.set(0, 0, 0),
+        (a.group.visible = !0),
+        a.group.rotation.set(0, b.yaw, 0),
+        O(0.016),
+        s.events.emit("boss:spawn", { enemy: b, pos: b.pos });
+      if (s.audio && s.audio.loop && !b.loop)
+        try {
+          b.loop = s.audio.loop("hound_servo", { pos: b.pos, gain: 0.2 });
+        } catch {
+          b.loop = null;
+        }
+    },
+    _deactivate() {
+      (b.active = !1), (b.alive = !1), (a.group.visible = !1), i.releaseToken(b);
+      if (b.loop) {
+        try {
+          b.loop.stop();
+        } catch {}
+        b.loop = null;
+      }
+    },
+    _raycast(T, D, C, G) {
+      let j = !1;
+      b.phase >= 2 && sM(T, D, b.corePos, sD.coreR, C, G) && ((G.part = "weak"), (G.enemy = b), (j = !0));
+      let N = Math.cos(b.yaw),
+        Q = Math.sin(b.yaw),
+        K = b.pos.y + sD.stand + 0.3;
+      return (
+        sV1.set(b.pos.x - Q * 0.85, K, b.pos.z - N * 0.85),
+        sV2.set(b.pos.x + Q * 0.85, K, b.pos.z + N * 0.85),
+        nM(T, D, sV1, sV2, sD.bodyR, C, G) && ((G.part = "body"), (G.enemy = b), (j = !0)),
+        (sV1.y = sV2.y = b.pos.y + sD.stand * 0.45),
+        nM(T, D, sV1, sV2, sD.bodyR * 0.8, C, G) && ((G.part = "body"), (G.enemy = b), (j = !0)),
+        sM(T, D, b.headPos, sD.headR, C, G) && ((G.part = "body"), (G.enemy = b), (j = !0)),
+        j
+      );
+    },
+    _update(T) {
+      b.alive ? S(T) : U(T);
+    },
+  };
+  function A(T, D, C, G, j) {
+    let N = sD.side[D] * sD.footX,
+      Q = sD.footZ[D],
+      K = Math.cos(j),
+      ie = Math.sin(j);
+    return T.set(C + N * K + Q * ie, 0, G - N * ie + Q * K), T;
+  }
+  function H(T) {
+    let D = Math.abs(b.speed),
+      C = Math.min(sD.stride, D * 0.06),
+      G = i.t * 7;
+    for (let j = 0; j < 4; j++) {
+      let N = j % 2 === 0 ? 0 : Math.PI,
+        Q = Math.sin(G + N);
+      sV1.set(sD.side[j] * sD.footX, 0, sD.fore[j] * sD.footZ + Q * C).applyAxisAngle(Hf, b.yaw).add(b.pos),
+        (sV1.y = s.physics.groundHeight(sV1.x, sV1.z, b.pos.y + sD.stand)),
+        (sV1.y += Math.max(0, Math.sin(G + N + 1.5708)) * sD.lift * Math.min(1, D * 0.5)),
+        b.feet[j].p.lerp(sV1, 1 - Math.exp(-16 * T));
+    }
+  }
+  function O(T) {
+    let D = Math.cos(b.yaw),
+      C = Math.sin(b.yaw),
+      G = (b.feet[0].p.y + b.feet[1].p.y) * 0.5,
+      j = (b.feet[2].p.y + b.feet[3].p.y) * 0.5,
+      N = (G + j) * 0.5 - b.pos.y - sD.stand;
+    (b.sY += (N - b.sY) * (1 - Math.exp(-8 * T))),
+      (b.sP += (Math.atan2(j - G, 2.2) * 0.5 + b.crouch * 0.28 + (b.es === "tele" ? 0.12 : 0) - b.sP) * (1 - Math.exp(-6 * T))),
+      (b.sR += (Math.atan2(b.feet[0].p.y + b.feet[2].p.y - b.feet[1].p.y - b.feet[3].p.y, 2.0) * 0.4 - b.sR) * (1 - Math.exp(-6 * T)));
+    let Q = sD.stand + b.sY - b.crouch * 0.25 + Math.sin(i.t * 1.6 + b.ph) * 0.03;
+    (a.group.rotation.y = b.yaw),
+      l.body.position.set(0, Q, 0),
+      l.body.rotation.set(b.sP, 0, b.sR),
+      (l.turret.rotation.y = b.tyaw),
+      (l.gun.rotation.x = b.tpitch - b.sP * 0.5),
+      l.head.rotation.set(b.hpitch, b.hyaw, 0),
+      l.antenna.rotation.set(b.sR * 0.8, 0, -b.sP * 0.8),
+      l.backL.scale.setScalar(b.phase >= 2 ? 0.01 : 1),
+      l.backR.scale.setScalar(b.phase >= 2 ? 0.01 : 1),
+      l.core.scale.setScalar((b.phase >= 2 ? 1 : 0.01) * (1 + b.flare * 1.4 + Math.max(0, b.coreT) * 0.6)),
+      l.finL.scale.setScalar(b.phase >= 3 ? 1 : 0.01),
+      l.finR.scale.setScalar(b.phase >= 3 ? 1 : 0.01);
+    let K = b.phase === 3 ? [16, 0.25, 0.08] : b.phase === 2 ? [14, 1, 0.35] : [8, 4, 0.7],
+      ie = 1 + b.flare * 3.5;
+    for (let F = 0; F < 3; F++) b.lensC[F] += (K[F] - b.lensC[F]) * (1 - Math.exp(-8 * T));
+    r.color.setRGB(b.lensC[0] * ie, b.lensC[1] * ie, b.lensC[2] * ie);
+    let fe = (i.t * (b.phase === 3 ? 3.2 : 1.4) + b.ph) % 1;
+    l.beacon && l.beacon.scale.setScalar(fe < 0.12 || (fe > 0.22 && fe < 0.3) ? 1 : 1e-4);
+    let B = Math.cos(b.sP),
+      P = Math.sin(b.sP),
+      V = Math.cos(b.sR),
+      Y = Math.sin(b.sR);
+    for (let L = 0; L < 4; L++) {
+      let Z = b.feet[L].p,
+        J = Z.x - b.pos.x,
+        oe = Z.y + sD.footR * 0.6 - b.pos.y,
+        f2 = Z.z - b.pos.z,
+        le = J * D - f2 * C,
+        R = oe - Q,
+        I = J * C + f2 * D,
+        se = R * B + I * P,
+        ae = -R * P + I * B,
+        k = le * V + se * Y,
+        ce = -le * Y + se * V;
+      q_(sQ, k - sD.side[L] * sD.hipX, ce - sD.hipY, ae - sD.fore[L] * sD.hipZ, sD.side[L], sD.l0, sD.L1, sD.L2 - sD.footR * 0.6),
+        (c[L].rotation.z = sQ.abd),
+        (u[L].rotation.x = sQ.hip),
+        (h[L].rotation.x = sQ.knee);
+    }
+    a.group.updateMatrixWorld(!0),
+      b.headPos.setFromMatrixPosition(l.head.matrixWorld),
+      b.corePos.setFromMatrixPosition(l.core.matrixWorld);
+  }
+  function sPh(T) {
+    (b.phase = T),
+      (b.invulnT = sN.invuln),
+      (b.es = "recover"),
+      (b.esT = sN.invuln),
+      (b.curSpeed = 0),
+      (b.cool = 0.6),
+      (b.flare = 1),
+      s.events.emit("boss:phase", { enemy: b, phase: T, hp: b.hp, maxHp: b.maxHp }),
+      s.fx.sparks(b.pos, jv, 24),
+      s.fx.debris(b.pos, { count: 6 }),
+      T === 2
+        ? (s.fx.explosion(b.pos, 1.6), s.fx.smoke(b.pos, { size: 0.8, life: 1.2, rise: 1 }))
+        : (s.fx.smoke(b.pos, { size: 1.1, life: 2, rise: 1.4, color: 2303272 }), s.fx.sparks(b.pos, jv, 30));
+  }
+  function sPick() {
+    let D = s.player,
+      dist = Math.hypot(D.pos.x - b.pos.x, D.pos.z - b.pos.z),
+      P = b.phase,
+      roll = o();
+    if (P === 1)
+      dist > sN.chargeMin || (dist > 6 && roll < 0.4)
+        ? ((b.es = "tele"),
+          (b.esT = sN.chargeTele),
+          s.events.emit("enemy:telegraph", { enemy: b, type: "sentinel", time: sN.chargeTele, pos: b.pos, melee: !0 }))
+        : roll < 0.65
+          ? ((b.es = "fan"), (b.esT = 0.2))
+          : ((b.es = "wave"),
+            (b.esT = 0.6),
+            s.events.emit("enemy:telegraph", { enemy: b, type: "sentinel", time: 0.6, pos: b.pos, wave: !0 }));
+    else if (P === 2)
+      b.missileCd <= 0 && dist > 6
+        ? ((b.es = "missile"), (b.esT = 0.35))
+        : b.summonCd <= 0 && roll < 0.45
+          ? ((b.es = "summon"), (b.esT = 0.7))
+          : dist > sN.chargeMin
+            ? ((b.es = "tele"),
+              (b.esT = sN.chargeTele * 0.7),
+              s.events.emit("enemy:telegraph", { enemy: b, type: "sentinel", time: sN.chargeTele * 0.7, pos: b.pos, melee: !0 }))
+            : ((b.es = "fan"), (b.esT = 0.15));
+    else
+      b.aoeCd <= 0 && roll < 0.5
+        ? ((b.es = "aoe"),
+          (b.esT = sN.aoeCharge),
+          s.events.emit("enemy:telegraph", { enemy: b, type: "sentinel", time: sN.aoeCharge, pos: b.pos, aoe: !0 }))
+        : b.missileCd <= 0
+          ? ((b.es = "missile"), (b.esT = 0.3))
+          : ((b.es = "fan"), (b.esT = 0.12));
+  }
+  function sFireFan() {
+    let D = s.player;
+    if (!D) return;
+    sV3.setFromMatrixPosition(l.gun.matrixWorld),
+      (sV3.lengthSq() < 1e-6 || Math.abs(sV3.x - b.pos.x) > sD.stand * 2) && sV3.set(b.pos.x, b.pos.y + sD.stand + 0.5, b.pos.z),
+      b.muzzle.copy(sV3);
+    let base = Math.atan2(D.pos.x - b.pos.x, D.pos.z - b.pos.z),
+      dist = Math.max(1, Math.hypot(D.pos.x - b.pos.x, D.pos.z - b.pos.z)),
+      n = sN.fanShots;
+    for (let k = 0; k < n; k++) {
+      let ang = base + (k / (n - 1) - 0.5) * sN.fanAngle;
+      sV1.set(Math.sin(ang), 0, Math.cos(ang)),
+        (sV1.y = (D.pos.y + 1.1 - (b.pos.y + sD.stand + 0.6)) / dist),
+        sV1.normalize(),
+        s.combat && s.combat.enemyShot && s.combat.enemyShot(b.muzzle, sV1, { damage: sN.fanDamage, range: 300 }),
+        sV4.copy(b.muzzle).addScaledVector(sV1, 60),
+        s.fx.tracer(b.muzzle, sV4, { color: 16760944, speed: 260, width: 0.05 }),
+        s.events.emit("enemy:fire", { enemy: b, pos: b.muzzle, dir: sV1, type: "sentinel" });
+    }
+    s.fx.muzzleFlash(b.muzzle, sV1, { scale: 1.6 }),
+      (b.sP += 0.12),
+      b.phase === 3 && b.missileCd <= 0 && sFireMissiles();
+  }
+  function sFireWave() {
+    let D = s.player;
+    if (!D) return;
+    sV1.set(D.pos.x - b.pos.x, 0, D.pos.z - b.pos.z).normalize(),
+      sV2.set(b.pos.x, b.pos.y + 0.6, b.pos.z).addScaledVector(sV1, 1.5),
+      s.combat && s.combat.spawnProjectile && s.combat.spawnProjectile({ from: sV2.clone(), dir: sV1.clone(), speed: sN.waveSpeed, damage: sN.waveDamage, radius: sN.waveRadius, source: "enemy", tracking: null, life: 2.2 }),
+      s.fx.dust(b.pos, jv),
+      (b.sP += 0.2);
+  }
+  function sFireMissiles() {
+    let D = s.player;
+    if (!D) return;
+    if (!(s.combat && s.combat.spawnProjectile)) return;
+    let n = sN.missileCount;
+    for (let k = 0; k < n; k++) {
+      let fromPod = k % 2 === 0 ? l.podL : l.podR;
+      sV1.setFromMatrixPosition(fromPod.matrixWorld),
+        (sV1.lengthSq() < 1e-6 || Math.abs(sV1.x - b.pos.x) > sD.stand * 2) && sV1.set(b.pos.x + (k % 2 ? 0.8 : -0.8), b.pos.y + sD.stand + 0.5, b.pos.z),
+        sV2.set(D.pos.x, D.pos.y + 1, D.pos.z).sub(sV1).normalize(),
+        (sV2.y += 0.35),
+        sV2.normalize(),
+        s.combat.spawnProjectile({ from: sV1.clone(), dir: sV2.clone(), speed: sN.missileSpeed, damage: sN.missileDamage, radius: sN.missileRadius, source: "enemy", tracking: D, life: sN.missileLife }),
+        s.events.emit("enemy:fire", { enemy: b, pos: sV1, dir: sV2, type: "sentinel", missile: !0 });
+    }
+    (b.missileCd = sN.missileCooldown), s.fx.smoke(sV1, { size: 0.6, life: 0.8, rise: 0.6 });
+  }
+  function sSummon() {
+    let D = s.player;
+    if (!D) return;
+    let n = sN.summonCount;
+    for (let k = 0; k < n; k++) {
+      let ang = o() * 6.283;
+      sV1.set(b.pos.x + Math.cos(ang) * 14, 6 + o() * 3, b.pos.z + Math.sin(ang) * 14),
+        s.enemies && s.enemies.spawn && s.enemies.spawn("gull", sV1, { state: "alert" });
+    }
+    (b.summonCd = sN.summonCooldown), s.events.emit("enemy:alert", { enemy: b });
+  }
+  function sBoom() {
+    s.fx.explosion(b.pos, sN.aoeRadius * 0.6),
+      s.combat && s.combat.explode && s.combat.explode(b.pos, sN.aoeRadius, sN.aoeDamage, "enemy"),
+      (b.aoeCd = sN.aoeCooldown),
+      (b.es = "stun"),
+      (b.esT = sN.aoeStun);
+  }
+  function S(T) {
+    let D = s.player,
+      C = i.t;
+    if (!D || D.alive === !1) {
+      (b.curSpeed = 0), H(T), O(T);
+      return;
+    }
+    (b.cool -= T),
+      (b.invulnT -= T),
+      (b.missileCd -= T),
+      (b.summonCd -= T),
+      (b.aoeCd -= T),
+      (b.coreT -= T),
+      (b.flare = Math.max(0, b.flare - T * 2)),
+      b.phase === 1 && b.hp <= b.maxHp * 0.66 ? sPh(2) : b.phase === 2 && b.hp <= b.maxHp * 0.33 && sPh(3);
+    let I = Math.atan2(D.pos.x - b.pos.x, D.pos.z - b.pos.z),
+      dist = Math.hypot(D.pos.x - b.pos.x, D.pos.z - b.pos.z),
+      lock = b.es === "tele" || b.es === "charge";
+    if (b.es === "charge" && b.phase === 2) {
+      let ie = Mm(I, b.yaw);
+      b.yaw += uo(ie * 3, -sN.turnRate * 0.7, sN.turnRate * 0.7) * T;
+    } else if (!lock) {
+      let ie = Mm(I, b.yaw);
+      b.yaw += uo(ie * 4, -sN.turnRate, sN.turnRate) * T;
+    }
+    let ty = Mm(Math.atan2(D.pos.x - b.pos.x, D.pos.z - b.pos.z) - b.yaw, b.tyaw);
+    (b.tyaw += uo(ty * 3, -2.5, 2.5) * T),
+      (b.tpitch += (uo(Math.atan2(-(D.pos.y + 1.1 - (b.pos.y + sD.stand + 0.6)), Math.max(dist, 1)), -0.5, 0.5) - b.tpitch) * (1 - Math.exp(-8 * T))),
+      (b.hyaw += (b.tyaw * 0.5 - b.hyaw) * (1 - Math.exp(-6 * T))),
+      (b.hpitch += (b.tpitch * 0.5 - b.hpitch) * (1 - Math.exp(-6 * T)));
+    let spd = b.phase === 2 ? sN.p2Speed : b.phase === 3 ? sN.p3Speed : sN.maxSpeed,
+      keep = sN.keepDist[b.phase - 1];
+    switch (b.es) {
+      case "idle":
+        b.curSpeed = dist > keep ? spd : 0;
+        b.cool <= 0 && dist < sN.engageRange && sPick();
+        break;
+      case "tele":
+        (b.esT -= T), (b.flare = Math.min(1, b.flare + T * 4)), (b.crouch = Math.min(1, b.crouch + T * 3)), (b.curSpeed = 0);
+        if (b.esT <= 0) (b.es = "charge"), (b.esT = sN.chargeTime), (b.curSpeed = b.phase === 2 ? sN.p2ChargeSpeed : sN.chargeSpeed);
+        break;
+      case "charge":
+        (b.esT -= T), (b.curSpeed = b.phase === 2 ? sN.p2ChargeSpeed : sN.chargeSpeed), (b.crouch = Math.max(0, b.crouch - T * 2));
+        if (dist < 2.0 && D.alive) {
+          D.damage(b.phase === 2 ? sN.chargeDamage * 1.3 : sN.chargeDamage, b.pos),
+            s.events.emit("enemy:melee", { enemy: b, pos: b.pos }),
+            (b.es = "recover"),
+            (b.esT = 0.8),
+            (b.curSpeed = 0),
+            b.phase === 2 && (b.coreT = 1.5);
+        } else if (b.esT <= 0) {
+          (b.es = "recover"), (b.esT = 0.7), (b.curSpeed = 0), b.phase === 2 && (b.coreT = 1.5);
+        }
+        break;
+      case "recover":
+        (b.esT -= T), (b.curSpeed = 0), (b.crouch = Math.max(0, b.crouch - T * 2));
+        b.esT <= 0 && ((b.es = "idle"), (b.cool = sN.cool[b.phase - 1]));
+        break;
+      case "fan":
+        (b.esT -= T), b.esT <= 0 && (sFireFan(), (b.es = "idle"), (b.cool = sN.cool[b.phase - 1]));
+        break;
+      case "wave":
+        (b.esT -= T), (b.flare = Math.min(1, b.flare + T * 3)), (b.curSpeed = 0);
+        b.esT <= 0 && (sFireWave(), (b.es = "idle"), (b.cool = sN.cool[b.phase - 1]));
+        break;
+      case "missile":
+        (b.esT -= T), (b.curSpeed = 0);
+        b.esT <= 0 && (sFireMissiles(), (b.es = "idle"), (b.cool = sN.cool[b.phase - 1]));
+        break;
+      case "summon":
+        (b.esT -= T), (b.curSpeed = 0), (b.flare = Math.min(1, b.flare + T * 2));
+        b.esT <= 0 && (sSummon(), (b.es = "idle"), (b.cool = sN.cool[b.phase - 1]));
+        break;
+      case "aoe":
+        (b.esT -= T), (b.flare = Math.min(1, b.flare + T * 3)), (b.curSpeed = 0), (b.crouch = Math.min(1, b.crouch + T * 1.5));
+        b.esT <= 0 && sBoom();
+        break;
+      case "stun":
+        (b.esT -= T), (b.curSpeed = 0), (b.flare = Math.max(0, b.flare - T * 2));
+        b.esT <= 0 && ((b.es = "idle"), (b.cool = sN.cool[2]));
+        break;
+    }
+    let ne = Math.sin(b.yaw),
+      re = Math.cos(b.yaw);
+    b.speed += (b.curSpeed - b.speed) * (1 - Math.exp(-5 * T));
+    if (Math.abs(b.speed) > 0.3) {
+      sV1.set(b.pos.x, b.pos.y + 1.4, b.pos.z), sV2.set(ne, 0, re);
+      let hit = s.physics.raycast(sV1, sV2, 1.6 + Math.abs(b.speed) * 0.14);
+      if (hit && hit.dist < 1.6) {
+        if (b.es === "charge") {
+          (b.es = "recover"),
+            (b.esT = 0.9),
+            (b.curSpeed = 0),
+            (b.speed *= 0.25),
+            s.fx.sparks(hit.point, hit.normal, 14),
+            s.events.emit("enemy:step", { pos: b.pos, type: "sentinel", enemy: b, speed: b.speed, crash: !0 }),
+            b.phase === 2 && (b.coreT = 1.5);
+        } else b.speed *= 0.4;
+      }
+    }
+    let $ = b.pos.x + ne * b.speed * T,
+      ue = b.pos.z + re * b.speed * T;
+    s.physics.nav && s.physics.nav.isWalkable && !s.physics.nav.isWalkable($, ue) && (($ = b.pos.x), (ue = b.pos.z), (b.speed *= 0.4));
+    let gh = s.physics.groundHeight($, ue, b.pos.y + 1);
+    (b.pos.x = $),
+      (b.pos.z = ue),
+      (b.pos.y += (gh - b.pos.y) * (1 - Math.exp(-12 * T))),
+      H(T),
+      (b.crouch = Math.max(0, b.crouch - T * 1.2)),
+      O(T);
+    let smokeBelow = b.phase === 3 ? 0.9 : 0.45;
+    b.hp < b.maxHp * smokeBelow &&
+      ((b.smokeT -= T),
+      b.smokeT <= 0 &&
+        ((b.smokeT = b.phase === 3 ? 0.12 : 0.28),
+        sV1.set(b.pos.x + (o() - 0.5) * 1.2, b.pos.y + 1.4 + o() * 2.2, b.pos.z + (o() - 0.5) * 1.2),
+        s.fx.smoke(sV1, { size: 0.6 + o() * 0.4, life: 1.4, color: b.phase === 3 ? 2303272 : 2500652, rise: 1 }),
+        o() < 0.4 && s.fx.sparks(sV1, jv, 2))),
+      b.loop &&
+        (b.loop.setPos(b.pos),
+        b.loop.setGain(uo(0.15 + Math.abs(b.speed) * 0.08, 0, 0.7)),
+        b.loop.setPitch(0.75 + Math.abs(b.speed) * 0.05 + b.flare * 0.2));
+  }
+  function q(C) {
+    (b.alive = !1),
+      (b.dieT = 0),
+      (b.es = "dead"),
+      (b.curSpeed = 0),
+      (b.sP += 0.3),
+      (b.sR += (o() < 0.5 ? -1 : 1) * 0.3),
+      l.beacon && l.beacon.scale.setScalar(1e-4),
+      s.fx.sparks(b.pos, jv, 26),
+      s.fx.debris(b.pos, { count: 8 }),
+      s.fx.explosion(b.pos, 2.4),
+      s.events.emit("boss:killed", { enemy: b, pos: b.pos }),
+      s.events.emit("enemy:killed", { enemy: b, pos: b.pos, type: "sentinel" });
+  }
+  function U(T) {
+    (b.dieT += T),
+      (b.smokeT -= T),
+      b.dieT < 4
+        ? (b.smokeT <= 0 &&
+            ((b.smokeT = 0.12),
+            sV1.set(b.pos.x + (o() - 0.5) * 1.5, b.pos.y + 1 + o() * 2, b.pos.z + (o() - 0.5) * 1.5),
+            s.fx.smoke(sV1, { size: 0.8 + o() * 0.6, life: 1.6, color: 1513499, rise: 1.2 }),
+            o() < 0.5 && s.fx.sparks(sV1, jv, 4)),
+          (b.pos.y -= 0.15 * T),
+          O(T))
+        : b.dieT > 5 && i.retire(b),
+      b.loop && b.loop.setGain(Math.max(0, 0.3 - b.dieT * 0.3));
+  }
+  return b;
+}
 var Ui = {
     gull: Zv,
     hound: Kv,
@@ -2479,6 +3108,8 @@ async function Em(i) {
     let D = iM(h, p, u, T);
     v.push(D), s.add(D.rig.group);
   }
+  let sB_ = sB(h, sZ(), u, 0);
+  s.add(sB_.rig.group);
   let g = [];
   for (let T = 0; T < Ui.maxBolts; T++)
     g.push({ on: !1, life: 0, len: 0, pos: new W(), dir: new W(), from: new W() });
@@ -2596,6 +3227,16 @@ async function Em(i) {
       list: t,
       TUNE: Ui,
       spawn(T, D, C = {}) {
+        if (T === "sentinel") {
+          let j = sB_;
+          return j && !j.active
+            ? ((j.id = O++),
+              t.push(j),
+              j._activate(D, C),
+              i.events.emit("enemy:spawn", { enemy: j }),
+              j)
+            : null;
+        }
         let G = T === "gull" ? d : T === "hound" ? v : null;
         if (!G) return null;
         let j = null;
@@ -2622,12 +3263,13 @@ async function Em(i) {
           let N = t[j];
           if (!N.alive) continue;
           let Q = N.pos.x - T.x,
-            K = N.pos.y + (N.type === "hound" ? 0.6 : 0) - T.y,
+            K = N.pos.y + (N.type === "hound" ? 0.6 : N.type === "sentinel" ? 2.5 : 0) - T.y,
             ie = N.pos.z - T.z,
-            F = Q * D.x + K * D.y + ie * D.z;
-          F < -1.5 ||
+            F = Q * D.x + K * D.y + ie * D.z,
+            r2 = N.type === "sentinel" ? 7.5 : 1.7;
+          F < (N.type === "sentinel" ? -3.5 : -1.5) ||
             F > C + 1.5 ||
-            Q * Q + K * K + ie * ie - F * F > 1.7 ||
+            Q * Q + K * K + ie * ie - F * F > r2 ||
             (G ||
               (G = { dist: 1 / 0, point: new W(), normal: new W(), enemy: null, part: "body" }),
             N._raycast(T, D, C, G));
@@ -2642,6 +3284,7 @@ async function Em(i) {
       clear() {
         for (let T of d) T.active && T._deactivate();
         for (let T of v) T.active && T._deactivate();
+        sB_ && sB_.active && sB_._deactivate();
         (t.length = 0), (n.length = 0), (h.tokens = 0);
         for (let T of g) T.on = !1;
         (m.count = 0), M && M.light && (M.light.intensity = 0);
@@ -2674,6 +3317,7 @@ async function Em(i) {
         ctx: h,
         gulls: d,
         hounds: v,
+        sentinel: sB_,
         wrecks: n,
         bolts: g,
         mats: u,
