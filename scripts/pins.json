@@ -2,7 +2,8 @@
   "src/lib/three.js": "43deda1b13ebd46e48fc2f4fc6cac1f376becaa4261bf1ab8fe15bd34034d3b9",
   "src/render/render.js": "e890199301b586e1365c69aee486b1c8bcdf6a6827222078171fbe7ac86386f7",
   "src/world/world.js": "553bebedbb517b4b384bb84fd39a9e8f3fd1497ad98a823943ea88767c7676c2",
-  "src/game/game.js": "8f699f53895febac098adb49755b05edf5489871456aefdc02d3b978c76fa374",
+  "src/game/game.js": "d92e6b03532f5a4861be18bc67923a465318a3de66233b2dfafa1e9b33432681",
+  "src/audio/audio.js": "b8c84c5ca5fc6d0b3abf6fe04eae012e6452323037939d1df6f020b1c3861829",
   "src/ai/ai.js": "baee61ed0051d64f86b96eb0961609335daa55d102f78eb0b666e3c24e16960e",
   "src/platform/adep.js": "c7c060ec7b7637f61964f11d79912b3233565f006d3c64b525c1bc738055f46b",
   "src/platform/mobile.js": "29c16fc4a3307be1c580221094159c1173274c61ca5809fcd7017fbbc7e31627"
