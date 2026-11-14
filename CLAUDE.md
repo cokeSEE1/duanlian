@@ -37,6 +37,7 @@ npm run check    # 只校验：pins 未漂移 + index.html 与 src 同步（CI �
 npm test         # 契约单测 + check
 node scripts/visual.mjs            # 截图回归（对比基线）
 node scripts/visual.mjs --update   # 重新生成截图基线
+node scripts/boss-smoke.mjs        # boss 冒烟（sentinel 生命周期 spawn→phase2→phase3→killed，headless）
 # 运行：直接开根目录 index.html，或 python3 -m http.server 8080
 ```
 
